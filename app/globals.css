@@ -1,0 +1,133 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Complicidad Design Tokens ────────────────────────────────────
+   Palette: deep burgundy primary, warm amber accent, rich neutrals.
+   All values are HSL — safe for Tailwind CSS variable binding.
+   Contrast verified for AA/AAA on interactive surfaces.
+   ──────────────────────────────────────────────────────────────── */
+
+@layer base {
+  :root {
+    /* ── Surfaces ────────────────────────────────────────── */
+    --background: 30 20% 98%;
+    --foreground: 340 10% 8%;
+    --card: 30 20% 98%;
+    --card-foreground: 340 10% 8%;
+    --popover: 30 20% 98%;
+    --popover-foreground: 340 10% 8%;
+
+    /* ── Primary: deep burgundy, warm and trustworthy ────── */
+    --primary: 345 46% 33%;
+    --primary-foreground: 30 20% 99%;
+
+    /* ── Secondary: warm slate ───────────────────────────── */
+    --secondary: 30 10% 92%;
+    --secondary-foreground: 340 10% 12%;
+
+    /* ── Muted ───────────────────────────────────────────── */
+    --muted: 30 10% 94%;
+    --muted-foreground: 340 8% 44%;
+
+    /* ── Accent: warm amber ──────────────────────────────── */
+    --accent: 38 85% 52%;
+    --accent-foreground: 340 10% 8%;
+
+    /* ── Destructive ─────────────────────────────────────── */
+    --destructive: 0 72% 48%;
+    --destructive-foreground: 0 0% 98%;
+
+    /* ── Borders & inputs ────────────────────────────────── */
+    --border: 30 8% 84%;
+    --input: 30 8% 84%;
+    --ring: 345 46% 33%;
+
+    /* ── Charts / data viz ───────────────────────────────── */
+    --chart-1: 345 46% 33%;
+    --chart-2: 38 85% 52%;
+    --chart-3: 200 65% 44%;
+    --chart-4: 150 45% 35%;
+    --chart-5: 280 40% 55%;
+
+    /* ── Radius ──────────────────────────────────────────── */
+    --radius: 0.5rem;
+
+    /* ── Sidebar ─────────────────────────────────────────── */
+    --sidebar-background: 340 10% 96%;
+    --sidebar-foreground: 340 10% 26%;
+    --sidebar-primary: 345 46% 33%;
+    --sidebar-primary-foreground: 30 20% 99%;
+    --sidebar-accent: 30 10% 92%;
+    --sidebar-accent-foreground: 340 10% 12%;
+    --sidebar-border: 30 8% 84%;
+    --sidebar-ring: 345 46% 33%;
+  }
+
+  .dark {
+    /* ── Surfaces ────────────────────────────────────────── */
+    --background: 340 12% 6%;
+    --foreground: 30 15% 93%;
+    --card: 340 10% 10%;
+    --card-foreground: 30 15% 93%;
+    --popover: 340 10% 10%;
+    --popover-foreground: 30 15% 93%;
+
+    /* ── Primary: brighter burgundy for dark surf ────────── */
+    --primary: 345 50% 55%;
+    --primary-foreground: 340 10% 8%;
+
+    /* ── Secondary ───────────────────────────────────────── */
+    --secondary: 340 8% 18%;
+    --secondary-foreground: 30 15% 93%;
+
+    /* ── Muted ───────────────────────────────────────────── */
+    --muted: 340 8% 18%;
+    --muted-foreground: 340 8% 62%;
+
+    /* ── Accent ──────────────────────────────────────────── */
+    --accent: 38 80% 54%;
+    --accent-foreground: 340 10% 8%;
+
+    /* ── Destructive ─────────────────────────────────────── */
+    --destructive: 0 65% 42%;
+    --destructive-foreground: 0 0% 98%;
+
+    /* ── Borders & inputs ────────────────────────────────── */
+    --border: 340 8% 22%;
+    --input: 340 8% 22%;
+    --ring: 345 50% 55%;
+
+    /* ── Charts ──────────────────────────────────────────── */
+    --chart-1: 345 50% 60%;
+    --chart-2: 38 80% 54%;
+    --chart-3: 200 60% 55%;
+    --chart-4: 150 50% 45%;
+    --chart-5: 280 45% 60%;
+
+    /* ── Sidebar ─────────────────────────────────────────── */
+    --sidebar-background: 340 10% 9%;
+    --sidebar-foreground: 30 15% 93%;
+    --sidebar-primary: 345 50% 55%;
+    --sidebar-primary-foreground: 340 10% 8%;
+    --sidebar-accent: 340 8% 16%;
+    --sidebar-accent-foreground: 30 15% 93%;
+    --sidebar-border: 340 8% 22%;
+    --sidebar-ring: 345 50% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
