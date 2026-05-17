@@ -18,9 +18,13 @@ import {
   saleIdFormSchema,
   saleListSchema,
   saleDetailSchema,
+  saleListEntrySchema,
+  saleListItemSchema,
   type SaleItem,
   type SaleFormData,
   type SaleListItem,
+  type SaleListEntry,
+  type SaleListItemDisplay,
   type SaleDetail,
 } from './schemas'
 
@@ -30,9 +34,13 @@ export {
   saleIdFormSchema,
   saleListSchema,
   saleDetailSchema,
+  saleListEntrySchema,
+  saleListItemSchema,
   type SaleItem,
   type SaleFormData,
   type SaleListItem,
+  type SaleListEntry,
+  type SaleListItemDisplay,
   type SaleDetail,
 }
 
@@ -77,7 +85,26 @@ export async function listSales(
   }
   const qs = params.toString()
   const path = qs ? `/sales?${qs}` : '/sales'
-  return apiGet<SaleListItem[]>(path)
+
+  const result = await apiGet<SaleListItem[]>(path)
+
+  // Validate response shape through Zod on success
+  if (result.ok) {
+    const parsed = saleListSchema.safeParse(result.data)
+    if (parsed.success) {
+      return { ...result, data: parsed.data }
+    }
+    return {
+      ok: false,
+      error: {
+        error: 'SchemaValidationError',
+        message: `Invalid sales list response: ${parsed.error.message}`,
+        status: 502,
+      },
+    }
+  }
+
+  return result
 }
 
 export async function getSale(

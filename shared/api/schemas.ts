@@ -108,10 +108,34 @@ export type CustomerHistoryResponse = z.infer<typeof customerHistoryResponseSche
 
 // ── Sales schemas ───────────────────────────────────────────────
 
-/** Reuses customerSaleSummarySchema shape — matches GET /sales response. */
-export const saleListSchema = z.array(customerSaleSummarySchema)
+/** Garment display row included in each GET /sales entry. */
+export const saleListItemSchema = z.object({
+  lineId: z.string(),
+  variantId: z.string(),
+  productName: z.string().nullable(),
+  sku: z.string().nullable(),
+  /** Human-readable fallback computed by the API: productName → SKU → "Variante sin datos". */
+  displayLabel: z.string(),
+  attributes: z.record(z.string(), z.string()),
+  quantity: z.number(),
+  unitPriceCents: z.number(),
+  priceType: z.enum(['regular', 'presale']),
+}).passthrough()
 
-export type SaleListItem = CustomerSaleSummary
+export type SaleListItemDisplay = z.infer<typeof saleListItemSchema>
+
+/** PR3 sale list entry — extends the legacy summary with garment display rows. */
+export const saleListEntrySchema = customerSaleSummarySchema.extend({
+  items: z.array(saleListItemSchema),
+}).passthrough()
+
+export type SaleListEntry = z.infer<typeof saleListEntrySchema>
+
+/** GET /sales now returns SaleListEntry[] with embedded garment display rows. */
+export const saleListSchema = z.array(saleListEntrySchema)
+
+/** @deprecated Use SaleListEntry instead; kept for backward compat aliasing. */
+export type SaleListItem = SaleListEntry
 
 const saleDetailLineConsumptionSchema = z.object({
   id: z.string(),
@@ -276,6 +300,95 @@ export const purchaseFormSchema = z.object({
 export type PurchaseFormData = z.infer<typeof purchaseFormSchema>
 
 // ── Cash schemas ────────────────────────────────────────────────────
+
+// ── Cash Box ──────────────────────────────────────────────
+
+export const cashBoxSchema = z.object({
+  id: z.string(),
+  businessDate: z.string(),
+  status: z.string(),
+  openingBalanceCents: z.number(),
+  currentBalanceCents: z.number(),
+  finalBalanceCents: z.number().nullable(),
+  closedAt: z.string().nullable(),
+  legacy: z.boolean(),
+  isCurrent: z.boolean().optional(),
+  createdAt: z.string().optional(),
+}).passthrough()
+
+export type CashBox = z.infer<typeof cashBoxSchema>
+
+export const cashBoxListSchema = z.array(cashBoxSchema)
+
+// ── Cash Box Summary ──────────────────────────────────────
+
+export const cashBoxSummarySchema = z.object({
+  cashBoxId: z.string(),
+  businessDate: z.string(),
+  status: z.string(),
+  openingBalanceCents: z.number(),
+  currentBalanceCents: z.number(),
+  netMovementCents: z.number(),
+  grossSalesCents: z.number(),
+  purchaseOutflowCents: z.number(),
+  returnOutflowCents: z.number(),
+  manualAdjustmentsCents: z.number(),
+  withdrawalsCents: z.number(),
+}).passthrough()
+
+export type CashBoxSummary = z.infer<typeof cashBoxSummarySchema>
+
+// ── Cash Movement ─────────────────────────────────────────
+
+export const cashMovementSchema = z.object({
+  id: z.string(),
+  type: z.string(),
+  amountCents: z.number(),
+  sourceId: z.string(),
+  concept: z.string().nullable(),
+  createdAt: z.string(),
+  profitCents: z.number().nullable(),
+}).passthrough()
+
+export type CashMovement = z.infer<typeof cashMovementSchema>
+
+export const cashMovementListSchema = z.object({
+  cashBoxId: z.string(),
+  businessDate: z.string(),
+  status: z.string(),
+  entries: z.array(cashMovementSchema),
+  total: z.number(),
+  page: z.number(),
+  pageSize: z.number(),
+  totalPages: z.number(),
+}).passthrough()
+
+export type CashMovementList = z.infer<typeof cashMovementListSchema>
+
+// ── Manual Movement Form ──────────────────────────────────
+
+export const movementTypes = ['MANUAL_ADJUSTMENT', 'WITHDRAWAL'] as const
+export type MovementType = (typeof movementTypes)[number]
+
+export const manualMovementFormSchema = z.object({
+  concept: z.string().min(1, 'El concepto es requerido'),
+  amountCents: z.number().int(),
+  type: z.enum(movementTypes, {
+    errorMap: () => ({ message: 'El tipo debe ser "MANUAL_ADJUSTMENT" o "WITHDRAWAL"' }),
+  }),
+})
+
+export type ManualMovementFormData = z.infer<typeof manualMovementFormSchema>
+
+// ── Close Cash Box Form ───────────────────────────────────
+
+export const closeCashBoxFormSchema = z.object({
+  finalBalanceCents: z.number().int().min(0, 'El balance final debe ser un entero positivo o cero'),
+})
+
+export type CloseCashBoxFormData = z.infer<typeof closeCashBoxFormSchema>
+
+// ── Closing (legacy) ─────────────────────────────────
 
 export const cashClosingFormSchema = z.object({
   notes: z.string().nullable().optional(),

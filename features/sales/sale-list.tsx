@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
-import { ShoppingCart, ArrowUpDown } from 'lucide-react'
+import { ShoppingCart } from 'lucide-react'
 
 import { listSales, type ListSalesFilters, type SaleListItem } from '@/shared/api/sales'
 import { saleChannelLabels } from '@/shared/api/schemas'
@@ -10,6 +10,8 @@ import { Badge } from '@/components/ui/badge'
 import { LoadingState } from '@/components/ui/loading-state'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ErrorState } from '@/components/ui/error-state'
+
+import { GarmentCell } from './sale-garment-cell'
 
 interface SaleListProps {
   filters?: ListSalesFilters
@@ -23,7 +25,8 @@ export function SaleList({ filters }: SaleListProps) {
   )
 }
 
-async function SaleListContent({ filters }: { filters?: ListSalesFilters }) {
+/** Exported for testing — renders the sale table from fetched data. */
+export async function SaleListContent({ filters }: { filters?: ListSalesFilters }) {
   const result = await listSales(filters)
 
   if (!result.ok) {
@@ -66,6 +69,7 @@ async function SaleListContent({ filters }: { filters?: ListSalesFilters }) {
                 <th className="text-right py-3 px-4 font-medium">Costo</th>
                 <th className="text-right py-3 px-4 font-medium">Ganancia</th>
                 <th className="text-right py-3 px-4 font-medium">Líneas</th>
+                <th className="text-left py-3 px-4 font-medium">Prenda</th>
                 <th className="text-right py-3 px-4 font-medium">Fecha</th>
               </tr>
             </thead>
@@ -98,6 +102,9 @@ async function SaleListContent({ filters }: { filters?: ListSalesFilters }) {
                   </td>
                   <td className="py-3 px-4 text-sm text-right">
                     {sale.lineCount}
+                  </td>
+                  <td className="py-3 px-4">
+                    <GarmentCell items={sale.items} />
                   </td>
                   <td className="py-3 px-4 text-xs text-right text-muted-foreground">
                     {formatDateTime(sale.createdAt)}

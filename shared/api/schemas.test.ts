@@ -19,6 +19,10 @@ import {
   productListQuerySchema,
   productListResponseSchema,
   productListMetaSchema,
+  saleListItemSchema,
+  saleListEntrySchema,
+  type SaleListEntry,
+  type SaleListItemDisplay,
 } from './schemas'
 
 // ── Auth schemas ──────────────────────────────────────────────────
@@ -594,8 +598,8 @@ describe('saleListSchema', () => {
     expect(result.success).toBe(true)
   })
 
-  it('validates an array of sale summaries', () => {
-    const validSummary = {
+  it('validates an array of sale summaries (with items)', () => {
+    const validEntry = {
       saleId: '550e8400-e29b-41d4-a716-446655440000',
       customerId: 'cust-uuid-1',
       channelReference: 'ML-123456',
@@ -607,11 +611,25 @@ describe('saleListSchema', () => {
       lineCount: 2,
       createdAt: '2025-03-15T12:00:00.000Z',
       updatedAt: '2025-03-15T12:30:00.000Z',
+      items: [
+        {
+          lineId: 'line-uuid-1',
+          variantId: 'var-uuid-1',
+          productName: 'Camiseta',
+          sku: 'CAM-M',
+          displayLabel: 'Camiseta',
+          attributes: { size: 'M' },
+          quantity: 1,
+          unitPriceCents: 75000,
+          priceType: 'regular',
+        },
+      ],
     }
-    const result = saleListSchema.safeParse([validSummary, validSummary])
+    const result = saleListSchema.safeParse([validEntry, validEntry])
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data).toHaveLength(2)
+      expect(result.data[0].items).toHaveLength(1)
     }
   })
 
@@ -878,3 +896,254 @@ describe('productListMetaSchema', () => {
     expect(result.success).toBe(false)
   })
 })
+
+// ── Sale list item schemas (PR3 garment display contract) ──────────
+
+describe('saleListItemSchema', () => {
+  const validItem = {
+    lineId: 'line-uuid-1',
+    variantId: 'var-uuid-1',
+    productName: 'Camiseta Clásica',
+    sku: 'CAM-CLA-M',
+    displayLabel: 'Camiseta Clásica',
+    attributes: { color: 'Blanco', size: 'M' },
+    quantity: 2,
+    unitPriceCents: 75000,
+    priceType: 'regular' as const,
+  }
+
+  it('parses a fully populated sale item row', () => {
+    const result = saleListItemSchema.safeParse(validItem)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.displayLabel).toBe('Camiseta Clásica')
+      expect(result.data.quantity).toBe(2)
+      expect(result.data.unitPriceCents).toBe(75000)
+      expect(result.data.priceType).toBe('regular')
+    }
+  })
+
+  it('accepts null productName and sku (fallback displayLabel still present)', () => {
+    const result = saleListItemSchema.safeParse({
+      ...validItem,
+      productName: null,
+      sku: null,
+      displayLabel: 'Variante sin datos',
+      attributes: {},
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.productName).toBeNull()
+      expect(result.data.sku).toBeNull()
+      expect(result.data.displayLabel).toBe('Variante sin datos')
+    }
+  })
+
+  it('accepts empty attributes object', () => {
+    const result = saleListItemSchema.safeParse({
+      ...validItem,
+      attributes: {},
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(Object.keys(result.data.attributes)).toHaveLength(0)
+    }
+  })
+
+  it('accepts presale priceType', () => {
+    const result = saleListItemSchema.safeParse({
+      ...validItem,
+      priceType: 'presale',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects missing displayLabel', () => {
+    const { displayLabel, ...without } = validItem
+    const result = saleListItemSchema.safeParse(without)
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects invalid priceType', () => {
+    const result = saleListItemSchema.safeParse({
+      ...validItem,
+      priceType: 'sale',
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects missing quantity', () => {
+    const { quantity, ...without } = validItem
+    const result = saleListItemSchema.safeParse(without)
+    expect(result.success).toBe(false)
+  })
+
+  it('accepts passthrough extra fields', () => {
+    const result = saleListItemSchema.safeParse({
+      ...validItem,
+      extraField: 'ignored',
+    })
+    expect(result.success).toBe(true)
+  })
+})
+
+describe('saleListEntrySchema', () => {
+  const validEntry: SaleListEntry = {
+    saleId: '550e8400-e29b-41d4-a716-446655440000',
+    customerId: 'cust-uuid-1',
+    channelReference: 'ML-123456',
+    channel: 'web',
+    status: 'ACTIVE',
+    totalRevenueCents: 150000,
+    totalCostCents: 120000,
+    grossProfitCents: 30000,
+    lineCount: 2,
+    createdAt: '2025-03-15T12:00:00.000Z',
+    updatedAt: '2025-03-15T12:30:00.000Z',
+    items: [
+      {
+        lineId: 'line-uuid-1',
+        variantId: 'var-uuid-1',
+        productName: 'Camiseta',
+        sku: 'CAM-M',
+        displayLabel: 'Camiseta',
+        attributes: { size: 'M' },
+        quantity: 1,
+        unitPriceCents: 75000,
+        priceType: 'regular',
+      },
+      {
+        lineId: 'line-uuid-2',
+        variantId: 'var-uuid-2',
+        productName: 'Pantalón',
+        sku: 'PAN-L',
+        displayLabel: 'Pantalón',
+        attributes: { size: 'L' },
+        quantity: 1,
+        unitPriceCents: 75000,
+        priceType: 'regular',
+      },
+    ],
+  }
+
+  it('parses a valid entry with multiple items', () => {
+    const result = saleListEntrySchema.safeParse(validEntry)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.items).toHaveLength(2)
+      expect(result.data.items[0].displayLabel).toBe('Camiseta')
+      expect(result.data.saleId).toBe('550e8400-e29b-41d4-a716-446655440000')
+      expect(result.data.status).toBe('ACTIVE')
+    }
+  })
+
+  it('accepts empty items array', () => {
+    const result = saleListEntrySchema.safeParse({
+      ...validEntry,
+      items: [],
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.items).toHaveLength(0)
+    }
+  })
+
+  it('accepts single item', () => {
+    const result = saleListEntrySchema.safeParse({
+      ...validEntry,
+      items: [validEntry.items[0]],
+      lineCount: 1,
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.items).toHaveLength(1)
+    }
+  })
+
+  it('rejects missing items field', () => {
+    const { items, ...withoutItems } = validEntry
+    const result = saleListEntrySchema.safeParse(withoutItems)
+    expect(result.success).toBe(false)
+  })
+
+  it('accepts null channelReference', () => {
+    const result = saleListEntrySchema.safeParse({
+      ...validEntry,
+      channelReference: null,
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.channelReference).toBeNull()
+    }
+  })
+
+  it('rejects missing saleId', () => {
+    const { saleId, ...without } = validEntry
+    const result = saleListEntrySchema.safeParse(without)
+    expect(result.success).toBe(false)
+  })
+
+  it('accepts passthrough extra fields (backward compat)', () => {
+    const result = saleListEntrySchema.safeParse({
+      ...validEntry,
+      extraField: 'ignored',
+    })
+    expect(result.success).toBe(true)
+  })
+})
+
+describe('saleListSchema (PR3 — items[] contract)', () => {
+  const validItem: SaleListItemDisplay = {
+    lineId: 'line-uuid-1',
+    variantId: 'var-uuid-1',
+    productName: 'Camiseta',
+    sku: 'CAM-M',
+    displayLabel: 'Camiseta',
+    attributes: { size: 'M' },
+    quantity: 1,
+    unitPriceCents: 75000,
+    priceType: 'regular',
+  }
+
+  const validEntry: SaleListEntry = {
+    saleId: 'sale-uuid-1',
+    customerId: 'cust-uuid-1',
+    channelReference: null,
+    channel: 'web',
+    status: 'ACTIVE',
+    totalRevenueCents: 75000,
+    totalCostCents: 50000,
+    grossProfitCents: 25000,
+    lineCount: 1,
+    createdAt: '2025-03-15T12:00:00.000Z',
+    updatedAt: '2025-03-15T12:30:00.000Z',
+    items: [validItem],
+  }
+
+  it('validates an array of sale entries with items', () => {
+    const result = saleListSchema.safeParse([validEntry])
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data).toHaveLength(1)
+      expect(result.data[0].items).toHaveLength(1)
+    }
+  })
+
+  it('validates an empty array', () => {
+    const result = saleListSchema.safeParse([])
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects a non-array value', () => {
+    const result = saleListSchema.safeParse({ not: 'an array' })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects old flat shape without items', () => {
+    const { items, ...oldShape } = validEntry
+    const result = saleListSchema.safeParse([oldShape])
+    expect(result.success).toBe(false)
+  })
+})
+
+

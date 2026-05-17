@@ -17,8 +17,9 @@ FROM node:22-alpine AS deps
 
 WORKDIR /app
 
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Install pnpm pinned to the lockfile-compatible major version.
+# pnpm v10+ requires approve-builds for packages such as sharp during Docker builds.
+RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 
 # Copy dependency manifests
 COPY package.json pnpm-lock.yaml ./
@@ -31,7 +32,7 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 
 # Copy installed dependencies from deps stage
 COPY --from=deps /app/node_modules ./node_modules
