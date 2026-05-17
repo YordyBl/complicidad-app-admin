@@ -381,9 +381,7 @@ export type ManualMovementFormData = z.infer<typeof manualMovementFormSchema>
 
 // ── Close Cash Box Form ───────────────────────────────────
 
-export const closeCashBoxFormSchema = z.object({
-  finalBalanceCents: z.number().int().min(0, 'El balance final debe ser un entero positivo o cero'),
-})
+export const closeCashBoxFormSchema = z.object({})
 
 export type CloseCashBoxFormData = z.infer<typeof closeCashBoxFormSchema>
 

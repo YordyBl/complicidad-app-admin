@@ -10,7 +10,6 @@ import {
   getCashBoxMovements,
   type CashClosingFormData,
   type CashClosingResponse,
-  type CloseCashBoxFormData,
   type ManualMovementFormData,
   type CashBoxSummary,
   type CashMovementList,
@@ -81,19 +80,12 @@ export async function closeCashAction(
 
 // ── Cash Box actions ───────────────────────────────────────────────
 
-/** Server Action: close the current cash box with a final balance. */
+/** Server Action: close the current cash box. The server derives the final balance from the cash ledger. */
 export async function closeCashBoxAction(
   _prevState: CashActionState | null,
-  formData: FormData,
+  _formData: FormData,
 ): Promise<CashActionState> {
-  const raw: Record<string, unknown> = {}
-
-  const finalBalanceStr = formData.get('finalBalanceCents') as string | null
-  if (finalBalanceStr) {
-    raw.finalBalanceCents = parseInt(finalBalanceStr, 10)
-  }
-
-  const parsed = closeCashBoxFormSchema.safeParse(raw)
+  const parsed = closeCashBoxFormSchema.safeParse({})
   if (!parsed.success) {
     return {
       success: false,
@@ -101,7 +93,7 @@ export async function closeCashBoxAction(
     }
   }
 
-  const result = await closeCashBox(parsed.data as CloseCashBoxFormData)
+  const result = await closeCashBox()
 
   if (!result.ok) {
     return {

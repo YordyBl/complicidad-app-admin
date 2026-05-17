@@ -71,11 +71,9 @@ export async function openCashBox(): Promise<ApiResult<CashBox>> {
   return apiPost<CashBox>('/cash-boxes/open', {})
 }
 
-/** Close the current cash box with a final reconciliation balance. */
-export async function closeCashBox(
-  body: CloseCashBoxFormData,
-): Promise<ApiResult<CashBox>> {
-  return apiPost<CashBox>('/cash-boxes/current/close', body)
+/** Close the current cash box. The server derives the final balance from the cash ledger. */
+export async function closeCashBox(): Promise<ApiResult<CashBox>> {
+  return apiPost<CashBox>('/cash-boxes/current/close', {})
 }
 
 /** Get financial summary for a specific cash box. */

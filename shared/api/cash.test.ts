@@ -175,18 +175,18 @@ describe('getCashBoxSummary', () => {
 })
 
 describe('closeCashBox', () => {
-  it('posts POST /cash-boxes/current/close with final balance', async () => {
+  it('posts POST /cash-boxes/current/close with empty body (server derives balance from ledger)', async () => {
     const closed = { id: 'cb-1', status: 'CLOSED', finalBalanceCents: 25000 }
     mockFetchSuccess(closed, 200)
 
-    const result = await closeCashBox({ finalBalanceCents: 25000 })
+    const result = await closeCashBox()
 
     expect(result.ok).toBe(true)
     expect(fetchImpl).toHaveBeenCalledWith(
       `${baseUrl}/cash-boxes/current/close`,
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ finalBalanceCents: 25000 }),
+        body: JSON.stringify({}),
       }),
     )
   })

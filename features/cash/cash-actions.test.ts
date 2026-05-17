@@ -25,7 +25,7 @@ vi.mock('@/shared/api/cash', () => {
   return {
     cashClosingFormSchema,
     manualMovementFormSchema,
-    closeCashBoxFormSchema: z.object({ finalBalanceCents: z.number().int().min(0) }),
+    closeCashBoxFormSchema: z.object({}),
     closeCash: mocks.closeCashMock,
     addCashMovement: mocks.addCashMovementMock,
     closeCashBox: vi.fn(),
@@ -35,7 +35,8 @@ vi.mock('@/shared/api/cash', () => {
   }
 })
 
-import { addMovementAction, closeCashAction } from './cash-actions'
+import { addMovementAction, closeCashAction, closeCashBoxAction } from './cash-actions'
+import * as cashApi from '@/shared/api/cash'
 
 function createFormData(entries: Record<string, string>): FormData {
   const fd = new FormData()
@@ -101,6 +102,61 @@ describe('closeCashAction', () => {
 
     expect(result.success).toBe(false)
     expect(result.error).toContain('disponible')
+  })
+})
+
+describe('closeCashBoxAction', () => {
+  it('calls closeCashBox without arguments and revalidates on success', async () => {
+    vi.mocked(cashApi.closeCashBox).mockResolvedValueOnce({
+      ok: true,
+      data: {
+        id: 'box-close-1',
+        businessDate: '2026-05-17',
+        status: 'CLOSED',
+        openingBalanceCents: 10000,
+        currentBalanceCents: 13500,
+        finalBalanceCents: 13500,
+        closedAt: '2026-05-17T23:00:00.000Z',
+        legacy: false,
+      },
+      status: 200,
+    })
+
+    const fd = new FormData()
+    const result = await closeCashBoxAction(null, fd)
+
+    expect(result.success).toBe(true)
+    expect(result.data?.id).toBe('box-close-1')
+    expect(vi.mocked(cashApi.closeCashBox)).toHaveBeenCalledWith()
+    expect(mocks.revalidatePathMock).toHaveBeenCalledWith('/cash')
+  })
+
+  it('returns error on 400 backend rejection', async () => {
+    vi.mocked(cashApi.closeCashBox).mockResolvedValueOnce({
+      ok: false,
+      error: { error: 'BusinessRuleError', message: 'Caja ya cerrada', status: 400 },
+    })
+
+    const fd = new FormData()
+    const result = await closeCashBoxAction(null, fd)
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Caja ya cerrada')
+    expect(vi.mocked(cashApi.closeCashBox)).toHaveBeenCalledWith()
+  })
+
+  it('returns error on network failure', async () => {
+    vi.mocked(cashApi.closeCashBox).mockResolvedValueOnce({
+      ok: false,
+      error: { error: 'NetworkError', message: 'Connection refused', status: 503 },
+    })
+
+    const fd = new FormData()
+    const result = await closeCashBoxAction(null, fd)
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('disponible')
+    expect(vi.mocked(cashApi.closeCashBox)).toHaveBeenCalledWith()
   })
 })
 

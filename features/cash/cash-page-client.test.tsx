@@ -765,7 +765,7 @@ describe('CashPageClient', () => {
   })
 
   describe('close caja — refresh and error', () => {
-    it('calls router.refresh when closeCashBoxAction succeeds', async () => {
+    it('calls router.refresh when closeCashBoxAction succeeds and shows Saldo actual in confirmation', async () => {
       mockServerActions.closeCashBoxAction.mockResolvedValue({ success: true })
       mockRouter.refresh.mockClear()
 
@@ -775,7 +775,7 @@ describe('CashPageClient', () => {
           currentBox={cashBox({ id: 'box-1' })}
           boxes={[cashBox({ id: 'box-1' })]}
           initialSelectedBoxId="box-1"
-          initialSummary={cashBoxSummary({ cashBoxId: 'box-1' })}
+          initialSummary={cashBoxSummary({ cashBoxId: 'box-1', currentBalanceCents: 150000 })}
           initialMovements={cashMovementList()}
           noCurrentBox={false}
         />,
@@ -784,8 +784,10 @@ describe('CashPageClient', () => {
       // Click "Cerrar caja" button to show the confirmation form
       await user.click(screen.getByRole('button', { name: /cerrar caja/i }))
 
-      // Fill in the balance field
-      await user.type(screen.getByLabelText(/Balance final/), '150000')
+      // Saldo actual should be displayed in the confirmation (no manual balance input)
+      expect(screen.getByText('Saldo actual a cerrar')).toBeInTheDocument()
+      expect(screen.getAllByText('S/ 1,500.00').length).toBeGreaterThanOrEqual(1)
+      expect(screen.queryByLabelText(/Balance final/)).not.toBeInTheDocument()
 
       // Click "Sí, cerrar caja" to confirm
       await user.click(screen.getByRole('button', { name: /sí, cerrar caja/i }))
@@ -808,7 +810,7 @@ describe('CashPageClient', () => {
           currentBox={cashBox({ id: 'box-1' })}
           boxes={[cashBox({ id: 'box-1' })]}
           initialSelectedBoxId="box-1"
-          initialSummary={cashBoxSummary({ cashBoxId: 'box-1' })}
+          initialSummary={cashBoxSummary({ cashBoxId: 'box-1', currentBalanceCents: 150000 })}
           initialMovements={cashMovementList()}
           noCurrentBox={false}
         />,
@@ -817,8 +819,9 @@ describe('CashPageClient', () => {
       // Click "Cerrar caja" button to show the confirmation form
       await user.click(screen.getByRole('button', { name: /cerrar caja/i }))
 
-      // Fill in the balance field
-      await user.type(screen.getByLabelText(/Balance final/), '150000')
+      // Saldo actual should be displayed in the confirmation (no manual balance input)
+      expect(screen.getByText('Saldo actual a cerrar')).toBeInTheDocument()
+      expect(screen.queryByLabelText(/Balance final/)).not.toBeInTheDocument()
 
       // Click "Sí, cerrar caja" to confirm
       await user.click(screen.getByRole('button', { name: /sí, cerrar caja/i }))

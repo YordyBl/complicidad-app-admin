@@ -117,7 +117,6 @@ export function CashPageClient({
   const [closeActionError, setCloseActionError] = useState<string | null>(null)
   const [closeSuccess, setCloseSuccess] = useState(false)
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
-  const [closeBalance, setCloseBalance] = useState('')
 
   const [movementForm, setMovementForm] = useState<{ concept: string; amount: string; type: 'MANUAL_ADJUSTMENT' | 'WITHDRAWAL' }>({ concept: '', amount: '', type: 'MANUAL_ADJUSTMENT' })
   const [addingMovement, setAddingMovement] = useState(false)
@@ -184,7 +183,6 @@ export function CashPageClient({
     setCloseActionError(null)
 
     const fd = new FormData()
-    fd.set('finalBalanceCents', closeBalance)
     const result = await closeCashBoxAction(null, fd)
 
     setClosingBox(false)
@@ -196,7 +194,7 @@ export function CashPageClient({
     } else {
       setCloseActionError(result.error ?? 'Error al cerrar caja')
     }
-  }, [closeBalance, router])
+  }, [router])
 
   // ── Add movement handler ────────────────────────────────────────
 
@@ -333,8 +331,6 @@ export function CashPageClient({
     closeActionError,
     closeSuccess,
     showCloseConfirm,
-    closeBalance,
-    setCloseBalance,
     setShowCloseConfirm,
     setCloseActionError,
     handleCloseCashBox,
@@ -387,11 +383,9 @@ export function CashPageClient({
           closeActionError,
           closeSuccess,
           showCloseConfirm,
-          closeBalance,
-          setCloseBalance,
-          setShowCloseConfirm,
-          setCloseActionError,
-          handleCloseCashBox,
+    setShowCloseConfirm,
+    setCloseActionError,
+    handleCloseCashBox,
           movementForm,
           setMovementForm,
           addingMovement,
@@ -501,8 +495,6 @@ interface DetailRenderParams {
   closeActionError: string | null
   closeSuccess: boolean
   showCloseConfirm: boolean
-  closeBalance: string
-  setCloseBalance: (v: string) => void
   setShowCloseConfirm: (v: boolean) => void
   setCloseActionError: (v: string | null) => void
   handleCloseCashBox: () => void
@@ -531,12 +523,10 @@ function renderSelectedBoxDetail(params: DetailRenderParams) {
     closingBox,
     closeActionError,
     closeSuccess,
-    showCloseConfirm,
-    closeBalance,
-    setCloseBalance,
-    setShowCloseConfirm,
-    setCloseActionError,
-    handleCloseCashBox,
+          showCloseConfirm,
+          setShowCloseConfirm,
+          setCloseActionError,
+          handleCloseCashBox,
     movementForm,
     setMovementForm,
     addingMovement,
@@ -617,8 +607,8 @@ function renderSelectedBoxDetail(params: DetailRenderParams) {
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Cerrar caja</CardTitle>
               <CardDescription>
-                Registrá el cierre de la caja actual con el balance final. Esta acción no se puede
-                deshacer y la caja no podrá reabrirse hasta el día siguiente.
+                Cerrá la caja del día. El servidor calcula automáticamente el balance final a partir
+                de los movimientos registrados. Esta acción no se puede deshacer.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -642,26 +632,22 @@ function renderSelectedBoxDetail(params: DetailRenderParams) {
                         </p>
                         <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
                           Esta acción es irreversible. La caja quedará cerrada y no podrá reabrirse
-                          hasta mañana. Verificá que el balance final sea correcto.
+                          hasta mañana. El servidor calculará el balance final con los movimientos del día.
                         </p>
                       </div>
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="close-balance">Balance final (centavos)</Label>
-                    <Input
-                      id="close-balance"
-                      type="number"
-                      placeholder="Ej: 150000"
-                      value={closeBalance}
-                      onChange={(e) => setCloseBalance(e.target.value)}
-                    />
-                  </div>
+                  {summary && (
+                    <div className="rounded-md border bg-muted/20 px-3 py-2">
+                      <p className="text-xs text-muted-foreground">Saldo actual a cerrar</p>
+                      <p className="text-lg font-semibold">{formatCurrency(summary.currentBalanceCents)}</p>
+                    </div>
+                  )}
                   <div className="flex gap-2">
                     <Button
                       variant="default"
                       onClick={handleCloseCashBox}
-                      disabled={closingBox || !closeBalance}
+                      disabled={closingBox}
                       className="gap-2"
                     >
                       <Lock className="w-4 h-4" />
