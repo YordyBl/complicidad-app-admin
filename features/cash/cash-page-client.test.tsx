@@ -71,7 +71,6 @@ function cashBoxSummary(overrides: Partial<CashBoxSummary> = {}): CashBoxSummary
     status: 'OPEN',
     openingBalanceCents: 10000,
     currentBalanceCents: 150000,
-    netMovementCents: 85000,
     grossSalesCents: 120000,
     purchaseOutflowCents: -20000,
     returnOutflowCents: -5000,
@@ -151,7 +150,7 @@ beforeEach(() => {
 
 describe('CashPageClient', () => {
   describe('summary cards', () => {
-    it('renders the four summary cards with exact values', () => {
+    it('renders summary metric cards with exact signed values', () => {
       const summary = cashBoxSummary()
       render(
         <CashPageClient
@@ -164,18 +163,26 @@ describe('CashPageClient', () => {
         />,
       )
 
+      expect(screen.getByText('Saldo inicial')).toBeInTheDocument()
+      expect(screen.getByText('S/ 100.00')).toBeInTheDocument()
+
       // Ventas brutas = grossSalesCents = 120000 → S/ 1,200.00
       expect(screen.getByText('Ventas brutas')).toBeInTheDocument()
       expect(screen.getByText('S/ 1,200.00')).toBeInTheDocument()
 
-      // Costos / Compras = |purchaseOutflowCents| = 20000 → S/ 200.00
-      expect(screen.getByText('Costos / Compras')).toBeInTheDocument()
-      expect(screen.getByText('S/ 200.00')).toBeInTheDocument()
-      expect(screen.queryByText('S/ 250.00')).not.toBeInTheDocument()
+      expect(screen.getByText('Compras')).toBeInTheDocument()
+      expect(screen.getAllByText('-S/ 200.00').length).toBeGreaterThanOrEqual(1)
 
-      // Movimiento neto = netMovementCents = 85000 → S/ 850.00
-      expect(screen.getByText('Movimiento neto')).toBeInTheDocument()
-      expect(screen.getByText('S/ 850.00')).toBeInTheDocument()
+      expect(screen.getByText('Devoluciones')).toBeInTheDocument()
+      expect(screen.getByText('-S/ 50.00')).toBeInTheDocument()
+
+      expect(screen.getByText('Ingresos')).toBeInTheDocument()
+      expect(screen.getByText('S/ 0.00')).toBeInTheDocument()
+
+      expect(screen.getByText('Retiros')).toBeInTheDocument()
+      expect(screen.getAllByText('-S/ 100.00').length).toBeGreaterThanOrEqual(1)
+
+      expect(screen.queryByText('Movimiento neto')).not.toBeInTheDocument()
 
       // Saldo actual = currentBalanceCents = 150000 → S/ 1,500.00
       expect(screen.getByText('Saldo actual')).toBeInTheDocument()
@@ -186,9 +193,10 @@ describe('CashPageClient', () => {
       const summary = cashBoxSummary({
         grossSalesCents: 75000,
         purchaseOutflowCents: -15000,
-        netMovementCents: 47000,
         currentBalanceCents: 200000,
         returnOutflowCents: -8000,
+        manualAdjustmentsCents: 5000,
+        withdrawalsCents: -10000,
       })
 
       render(
@@ -203,9 +211,10 @@ describe('CashPageClient', () => {
       )
 
       expect(screen.getByText('S/ 750.00')).toBeInTheDocument()
-      expect(screen.getByText('S/ 150.00')).toBeInTheDocument()
-      expect(screen.queryByText('S/ 230.00')).not.toBeInTheDocument()
-      expect(screen.getByText('S/ 470.00')).toBeInTheDocument()
+      expect(screen.getByText('-S/ 150.00')).toBeInTheDocument()
+      expect(screen.getByText('-S/ 80.00')).toBeInTheDocument()
+      expect(screen.getByText('S/ 50.00')).toBeInTheDocument()
+      expect(screen.getAllByText('-S/ 100.00').length).toBeGreaterThanOrEqual(1)
       expect(screen.getByText('S/ 2,000.00')).toBeInTheDocument()
     })
   })
@@ -294,7 +303,6 @@ describe('CashPageClient', () => {
             cashBoxId: 'box-2',
             status: 'CLOSED',
             currentBalanceCents: 50000,
-            netMovementCents: 40000,
           })}
           initialMovements={cashMovementList({ cashBoxId: 'box-2', status: 'CLOSED' })}
           noCurrentBox={false}
@@ -378,6 +386,38 @@ describe('CashPageClient', () => {
       const retiroBadges = withinTable.getAllByText('Retiro')
       expect(retiroBadges.length).toBeGreaterThanOrEqual(1)
     })
+
+    it('filters movements by type from the history header', async () => {
+      mockServerActions.getMovementsAction.mockResolvedValueOnce({
+        success: true,
+        data: cashMovementList({
+          entries: [cashMovementList().entries[2]],
+          total: 1,
+        }),
+      })
+
+      const user = userEvent.setup()
+      render(
+        <CashPageClient
+          currentBox={cashBox()}
+          boxes={[cashBox()]}
+          initialSelectedBoxId="box-1"
+          initialSummary={cashBoxSummary()}
+          initialMovements={cashMovementList()}
+          noCurrentBox={false}
+        />,
+      )
+
+      await user.selectOptions(screen.getByLabelText('Filtrar por tipo'), 'WITHDRAWAL')
+
+      await waitFor(() => {
+        expect(mockServerActions.getMovementsAction).toHaveBeenCalledWith('box-1', {
+          page: 1,
+          pageSize: 20,
+          type: 'WITHDRAWAL',
+        })
+      })
+    })
   })
 
   describe('selector', () => {
@@ -448,6 +488,111 @@ describe('CashPageClient', () => {
   })
 
   describe('manual movement — summary refresh', () => {
+    it('shows soles input copy and no longer asks for cents or negative amounts', () => {
+      render(
+        <CashPageClient
+          currentBox={cashBox({ id: 'box-1' })}
+          boxes={[cashBox({ id: 'box-1' })]}
+          initialSelectedBoxId="box-1"
+          initialSummary={cashBoxSummary({ cashBoxId: 'box-1' })}
+          initialMovements={cashMovementList()}
+          noCurrentBox={false}
+        />,
+      )
+
+      expect(screen.getByLabelText('Monto (soles)')).toBeInTheDocument()
+      expect(screen.getByText(/Ingresá siempre un monto positivo/)).toBeInTheDocument()
+      expect(screen.queryByText(/centavos/i)).not.toBeInTheDocument()
+      expect(screen.queryByText(/positivo o negativo/i)).not.toBeInTheDocument()
+    })
+
+    it('converts a positive soles amount to cents before calling the action', async () => {
+      mockServerActions.addMovementAction.mockResolvedValue({ success: true })
+
+      const user = userEvent.setup()
+      render(
+        <CashPageClient
+          currentBox={cashBox({ id: 'box-1' })}
+          boxes={[cashBox({ id: 'box-1' })]}
+          initialSelectedBoxId="box-1"
+          initialSummary={cashBoxSummary({ cashBoxId: 'box-1' })}
+          initialMovements={cashMovementList()}
+          noCurrentBox={false}
+        />,
+      )
+
+      await user.type(screen.getByLabelText('Concepto'), 'Ajuste de caja')
+      await user.type(screen.getByLabelText('Monto (soles)'), '100.50')
+      await user.click(screen.getByRole('button', { name: /registrar movimiento/i }))
+
+      await waitFor(() => {
+        expect(mockServerActions.addMovementAction).toHaveBeenCalledTimes(1)
+      })
+
+      const submittedFormData = mockServerActions.addMovementAction.mock.calls[0][1] as FormData
+      expect(submittedFormData.get('amountCents')).toBe('10050')
+      expect(submittedFormData.get('type')).toBe('MANUAL_ADJUSTMENT')
+    })
+
+    it('rejects zero and negative values in the UI before submitting', async () => {
+      const user = userEvent.setup()
+      render(
+        <CashPageClient
+          currentBox={cashBox({ id: 'box-1' })}
+          boxes={[cashBox({ id: 'box-1' })]}
+          initialSelectedBoxId="box-1"
+          initialSummary={cashBoxSummary({ cashBoxId: 'box-1' })}
+          initialMovements={cashMovementList()}
+          noCurrentBox={false}
+        />,
+      )
+
+      const amountInput = screen.getByLabelText('Monto (soles)')
+      const submitButton = screen.getByRole('button', { name: /registrar movimiento/i })
+
+      await user.type(screen.getByLabelText('Concepto'), 'Retiro inválido')
+      await user.type(amountInput, '0')
+
+      expect(screen.getByText('Ingresá un monto mayor a 0 en soles.')).toBeInTheDocument()
+      expect(submitButton).toBeDisabled()
+
+      await user.clear(amountInput)
+      await user.type(amountInput, '-10')
+
+      expect(screen.getByText('Ingresá un monto mayor a 0 en soles.')).toBeInTheDocument()
+      expect(submitButton).toBeDisabled()
+      expect(mockServerActions.addMovementAction).not.toHaveBeenCalled()
+    })
+
+    it('uses a positive input for retiro and leaves sign handling to the backend', async () => {
+      mockServerActions.addMovementAction.mockResolvedValue({ success: true })
+
+      const user = userEvent.setup()
+      render(
+        <CashPageClient
+          currentBox={cashBox({ id: 'box-1' })}
+          boxes={[cashBox({ id: 'box-1' })]}
+          initialSelectedBoxId="box-1"
+          initialSummary={cashBoxSummary({ cashBoxId: 'box-1' })}
+          initialMovements={cashMovementList()}
+          noCurrentBox={false}
+        />,
+      )
+
+      await user.selectOptions(screen.getByLabelText('Tipo'), 'WITHDRAWAL')
+      await user.type(screen.getByLabelText('Concepto'), 'Retiro caja chica')
+      await user.type(screen.getByLabelText('Monto (soles)'), '25')
+      await user.click(screen.getByRole('button', { name: /registrar movimiento/i }))
+
+      await waitFor(() => {
+        expect(mockServerActions.addMovementAction).toHaveBeenCalledTimes(1)
+      })
+
+      const submittedFormData = mockServerActions.addMovementAction.mock.calls[0][1] as FormData
+      expect(submittedFormData.get('type')).toBe('WITHDRAWAL')
+      expect(submittedFormData.get('amountCents')).toBe('2500')
+    })
+
     it('refreshes summary cards and movement list after successful manual movement', async () => {
       mockServerActions.addMovementAction.mockResolvedValue({ success: true })
       // Return updated summary with different values to verify refresh
@@ -455,7 +600,6 @@ describe('CashPageClient', () => {
         success: true,
         data: cashBoxSummary({
           currentBalanceCents: 160000,
-          netMovementCents: 95000,
           grossSalesCents: 130000,
         }),
       })
@@ -486,7 +630,7 @@ describe('CashPageClient', () => {
 
       // Fill in the movement form
       await user.type(screen.getByLabelText('Concepto'), 'Test movement')
-      await user.type(screen.getByLabelText(/Monto/), '10000')
+      await user.type(screen.getByLabelText('Monto (soles)'), '100')
 
       // Click register
       await user.click(screen.getByRole('button', { name: /registrar movimiento/i }))
@@ -494,13 +638,38 @@ describe('CashPageClient', () => {
       // Both summary and movements actions should be called
       await waitFor(() => {
         expect(mockServerActions.getSummaryAction).toHaveBeenCalledWith('box-1')
-        expect(mockServerActions.getMovementsAction).toHaveBeenCalledWith('box-1')
+        expect(mockServerActions.getMovementsAction).toHaveBeenCalledWith('box-1', undefined)
       })
 
       // Updated summary values should appear
       await waitFor(() => {
         expect(screen.getByText('S/ 1,600.00')).toBeInTheDocument()
       })
+    })
+
+    it('renders Ganancia column with value only for sale movements', () => {
+      render(
+        <CashPageClient
+          currentBox={cashBox()}
+          boxes={[cashBox()]}
+          initialSelectedBoxId="box-1"
+          initialSummary={cashBoxSummary()}
+          initialMovements={cashMovementList()}
+          noCurrentBox={false}
+        />,
+      )
+
+      const table = screen.getByRole('table')
+      const withinTable = within(table)
+      expect(withinTable.getByText('Ganancia')).toBeInTheDocument()
+
+      const saleRow = withinTable.getByText('Venta #1').closest('tr')
+      expect(saleRow).not.toBeNull()
+      expect(within(saleRow as HTMLTableRowElement).getByText('S/ 200.00')).toBeInTheDocument()
+
+      const withdrawalRow = withinTable.getByText('Retiro efectivo').closest('tr')
+      expect(withdrawalRow).not.toBeNull()
+      expect(within(withdrawalRow as HTMLTableRowElement).getByText('—')).toBeInTheDocument()
     })
 
     it('shows error and does NOT refresh summary when addMovementAction fails', async () => {
@@ -525,7 +694,7 @@ describe('CashPageClient', () => {
       )
 
       await user.type(screen.getByLabelText('Concepto'), 'Bad movement')
-      await user.type(screen.getByLabelText(/Monto/), '99999')
+      await user.type(screen.getByLabelText('Monto (soles)'), '999.99')
       await user.click(screen.getByRole('button', { name: /registrar movimiento/i }))
 
       await waitFor(() => {

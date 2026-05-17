@@ -1,17 +1,41 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { z } from 'zod'
 
-const { closeCashMock } = vi.hoisted(() => ({
+const mocks = vi.hoisted(() => ({
   closeCashMock: vi.fn(),
+  addCashMovementMock: vi.fn(),
+  revalidatePathMock: vi.fn(),
 }))
 
-vi.mock('@/shared/api/cash', () => ({
-  cashClosingFormSchema: {
-    safeParse: (data: unknown) => ({ success: true, data }),
-  },
-  closeCash: closeCashMock,
+vi.mock('next/cache', () => ({
+  revalidatePath: mocks.revalidatePathMock,
 }))
 
-import { closeCashAction } from './cash-actions'
+vi.mock('@/shared/api/cash', () => {
+  const cashClosingFormSchema = z.object({
+    notes: z.string().nullable().optional(),
+  })
+
+  const manualMovementFormSchema = z.object({
+    concept: z.string().min(1, 'El concepto es requerido'),
+    amountCents: z.number().int().positive('El monto debe ser mayor a cero'),
+    type: z.enum(['MANUAL_ADJUSTMENT', 'WITHDRAWAL']),
+  })
+
+  return {
+    cashClosingFormSchema,
+    manualMovementFormSchema,
+    closeCashBoxFormSchema: z.object({ finalBalanceCents: z.number().int().min(0) }),
+    closeCash: mocks.closeCashMock,
+    addCashMovement: mocks.addCashMovementMock,
+    closeCashBox: vi.fn(),
+    openCashBox: vi.fn(),
+    getCashBoxSummary: vi.fn(),
+    getCashBoxMovements: vi.fn(),
+  }
+})
+
+import { addMovementAction, closeCashAction } from './cash-actions'
 
 function createFormData(entries: Record<string, string>): FormData {
   const fd = new FormData()
@@ -27,7 +51,7 @@ beforeEach(() => {
 
 describe('closeCashAction', () => {
   it('closes cash successfully with notes', async () => {
-    closeCashMock.mockResolvedValueOnce({
+    mocks.closeCashMock.mockResolvedValueOnce({
       ok: true,
       data: { id: 'close-1', closedAt: '2025-03-15T12:00:00Z', notes: 'End of day' },
       status: 201,
@@ -41,7 +65,7 @@ describe('closeCashAction', () => {
   })
 
   it('closes cash successfully without notes', async () => {
-    closeCashMock.mockResolvedValueOnce({
+    mocks.closeCashMock.mockResolvedValueOnce({
       ok: true,
       data: { id: 'close-2', closedAt: '2025-03-15T12:00:00Z' },
       status: 201,
@@ -54,7 +78,7 @@ describe('closeCashAction', () => {
   })
 
   it('returns error on 400 backend rejection', async () => {
-    closeCashMock.mockResolvedValueOnce({
+    mocks.closeCashMock.mockResolvedValueOnce({
       ok: false,
       error: { error: 'ValidationError', message: 'Cash already closed', status: 400 },
     })
@@ -67,7 +91,7 @@ describe('closeCashAction', () => {
   })
 
   it('returns error on network failure', async () => {
-    closeCashMock.mockResolvedValueOnce({
+    mocks.closeCashMock.mockResolvedValueOnce({
       ok: false,
       error: { error: 'NetworkError', message: 'Connection refused', status: 503 },
     })
@@ -77,5 +101,58 @@ describe('closeCashAction', () => {
 
     expect(result.success).toBe(false)
     expect(result.error).toContain('disponible')
+  })
+})
+
+describe('addMovementAction', () => {
+  it('sends a positive amount in cents to the API', async () => {
+    mocks.addCashMovementMock.mockResolvedValueOnce({
+      ok: true,
+      data: { id: 'mov-1' },
+      status: 201,
+    })
+
+    const fd = createFormData({
+      concept: 'Retiro de caja',
+      amountCents: '2500',
+      type: 'WITHDRAWAL',
+    })
+
+    const result = await addMovementAction(null, fd)
+
+    expect(result.success).toBe(true)
+    expect(mocks.addCashMovementMock).toHaveBeenCalledWith({
+      concept: 'Retiro de caja',
+      amountCents: 2500,
+      type: 'WITHDRAWAL',
+    })
+  })
+
+  it('rejects zero amount before calling the API', async () => {
+    const fd = createFormData({
+      concept: 'Retiro de caja',
+      amountCents: '0',
+      type: 'WITHDRAWAL',
+    })
+
+    const result = await addMovementAction(null, fd)
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('El monto debe ser mayor a cero')
+    expect(mocks.addCashMovementMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects negative amount before calling the API', async () => {
+    const fd = createFormData({
+      concept: 'Retiro de caja',
+      amountCents: '-2500',
+      type: 'WITHDRAWAL',
+    })
+
+    const result = await addMovementAction(null, fd)
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('El monto debe ser mayor a cero')
+    expect(mocks.addCashMovementMock).not.toHaveBeenCalled()
   })
 })

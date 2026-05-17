@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, type Dispatch, type SetStateAction } from 'react'
+import { useState, useCallback, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Banknote,
@@ -62,6 +62,21 @@ function movementTypeColor(type: string): 'default' | 'secondary' | 'destructive
   }
 }
 
+function parseSolesAmountToCents(value: string): number | null {
+  const normalized = value.trim().replace(',', '.')
+
+  if (!/^\d+(\.\d{1,2})?$/.test(normalized)) {
+    return null
+  }
+
+  const amount = Number(normalized)
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return null
+  }
+
+  return Math.round(amount * 100)
+}
+
 // ── Props ───────────────────────────────────────────────────────────
 
 export interface CashPageClientProps {
@@ -95,6 +110,7 @@ export function CashPageClient({
   const [summaryLoading, setSummaryLoading] = useState(false)
   const [summaryError, setSummaryError] = useState<string | null>(initialSummaryError ?? null)
   const [movementsError, setMovementsError] = useState<string | null>(initialMovementsError ?? null)
+  const [movementTypeFilter, setMovementTypeFilter] = useState('')
 
   // ── Mutation state ───────────────────────────────────────────────
   const [closingBox, setClosingBox] = useState(false)
@@ -103,7 +119,7 @@ export function CashPageClient({
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
   const [closeBalance, setCloseBalance] = useState('')
 
-  const [movementForm, setMovementForm] = useState<{ concept: string; amountCents: string; type: 'MANUAL_ADJUSTMENT' | 'WITHDRAWAL' }>({ concept: '', amountCents: '', type: 'MANUAL_ADJUSTMENT' })
+  const [movementForm, setMovementForm] = useState<{ concept: string; amount: string; type: 'MANUAL_ADJUSTMENT' | 'WITHDRAWAL' }>({ concept: '', amount: '', type: 'MANUAL_ADJUSTMENT' })
   const [addingMovement, setAddingMovement] = useState(false)
   const [movementError, setMovementError] = useState<string | null>(null)
   const [movementSuccess, setMovementSuccess] = useState(false)
@@ -131,6 +147,7 @@ export function CashPageClient({
   const handleSelectBox = useCallback(async (boxId: string) => {
     if (boxId === selectedBoxId) return
     setSelectedBoxId(boxId)
+    setMovementTypeFilter('')
     setSummaryLoading(true)
     setSummaryError(null)
     setMovementsError(null)
@@ -184,24 +201,30 @@ export function CashPageClient({
   // ── Add movement handler ────────────────────────────────────────
 
   const handleAddMovement = useCallback(async () => {
+    const amountCents = parseSolesAmountToCents(movementForm.amount)
+    if (amountCents === null) {
+      setMovementError('Ingresá un monto mayor a 0 en soles.')
+      return
+    }
+
     setAddingMovement(true)
     setMovementError(null)
 
     const fd = new FormData()
     fd.set('concept', movementForm.concept)
-    fd.set('amountCents', movementForm.amountCents)
+    fd.set('amountCents', String(amountCents))
     fd.set('type', movementForm.type)
     const result = await addMovementAction(null, fd)
 
     setAddingMovement(false)
     if (result.success) {
       setMovementSuccess(true)
-      setMovementForm({ concept: '', amountCents: '', type: 'MANUAL_ADJUSTMENT' })
+      setMovementForm({ concept: '', amount: '', type: 'MANUAL_ADJUSTMENT' })
       // Refresh movements and summary so cards update immediately
       if (selectedBoxId) {
         const [sResult, mResult] = await Promise.all([
           getSummaryAction(selectedBoxId),
-          getMovementsAction(selectedBoxId),
+          getMovementsAction(selectedBoxId, movementTypeFilter ? { type: movementTypeFilter } : undefined),
         ])
         if (sResult.success && sResult.data) {
           setSummary(sResult.data)
@@ -214,7 +237,7 @@ export function CashPageClient({
     } else {
       setMovementError(result.error ?? 'Error al agregar movimiento')
     }
-  }, [movementForm, selectedBoxId])
+  }, [movementForm, movementTypeFilter, selectedBoxId])
 
   // ── Open caja handler ───────────────────────────────────────────
 
@@ -234,9 +257,32 @@ export function CashPageClient({
 
   const handleMovementPage = useCallback(async (page: number) => {
     if (!selectedBoxId) return
-    const mResult = await getMovementsAction(selectedBoxId, { page, pageSize: movements?.pageSize ?? 20 })
+    const mResult = await getMovementsAction(selectedBoxId, {
+      page,
+      pageSize: movements?.pageSize ?? 20,
+      ...(movementTypeFilter ? { type: movementTypeFilter } : {}),
+    })
     if (mResult.success && mResult.data) {
       setMovements(mResult.data)
+    }
+  }, [selectedBoxId, movements?.pageSize, movementTypeFilter])
+
+  const handleMovementTypeFilter = useCallback(async (type: string) => {
+    setMovementTypeFilter(type)
+    if (!selectedBoxId) return
+
+    setMovementsError(null)
+    const mResult = await getMovementsAction(selectedBoxId, {
+      page: 1,
+      pageSize: movements?.pageSize ?? 20,
+      ...(type ? { type } : {}),
+    })
+
+    if (mResult.success && mResult.data) {
+      setMovements(mResult.data)
+    } else {
+      setMovements(null)
+      setMovementsError(mResult.error ?? 'Error al cargar movimientos')
     }
   }, [selectedBoxId, movements?.pageSize])
 
@@ -273,6 +319,36 @@ export function CashPageClient({
     )
   }
 
+  const detailContent = renderSelectedBoxDetail({
+    selectedBoxId,
+    selectedBox,
+    selectedBoxData,
+    canMutateCashBox,
+    summary,
+    movements,
+    summaryLoading,
+    summaryError,
+    movementsError,
+    closingBox,
+    closeActionError,
+    closeSuccess,
+    showCloseConfirm,
+    closeBalance,
+    setCloseBalance,
+    setShowCloseConfirm,
+    setCloseActionError,
+    handleCloseCashBox,
+    movementForm,
+    setMovementForm,
+    addingMovement,
+    movementError,
+    movementSuccess,
+    movementTypeFilter,
+    handleAddMovement,
+    handleMovementPage,
+    handleMovementTypeFilter,
+  })
+
   // ── Render: No current box, but historical boxes exist ───────────
 
   if (noCurrentBox && boxes.length > 0) {
@@ -297,18 +373,11 @@ export function CashPageClient({
           </div>
         )}
 
-        {/* Selector + historical detail */}
-        <CashBoxSelector
-          boxes={boxes}
-          selectedBoxId={selectedBoxId}
-          onSelect={handleSelectBox}
-        />
-
         {renderSelectedBoxDetail({
           selectedBoxId,
           selectedBox,
           selectedBoxData,
-          canMutateCashBox: false, // no current box = no mutable actions
+          canMutateCashBox: false,
           summary,
           movements,
           summaryLoading,
@@ -327,10 +396,18 @@ export function CashPageClient({
           setMovementForm,
           addingMovement,
           movementError,
-          movementSuccess,
-          handleAddMovement,
-          handleMovementPage,
-        })}
+            movementSuccess,
+            movementTypeFilter,
+            handleAddMovement,
+            handleMovementPage,
+            handleMovementTypeFilter,
+          })}
+
+        <CashBoxSelector
+          boxes={boxes}
+          selectedBoxId={selectedBoxId}
+          onSelect={handleSelectBox}
+        />
       </div>
     )
   }
@@ -350,40 +427,13 @@ export function CashPageClient({
         </div>
       </div>
 
-      {/* Selector */}
+      {detailContent}
+
       <CashBoxSelector
         boxes={boxes}
         selectedBoxId={selectedBoxId}
         onSelect={handleSelectBox}
       />
-
-      {renderSelectedBoxDetail({
-        selectedBoxId,
-        selectedBox,
-        selectedBoxData,
-        canMutateCashBox,
-        summary,
-        movements,
-        summaryLoading,
-        summaryError,
-        movementsError,
-        closingBox,
-        closeActionError,
-        closeSuccess,
-        showCloseConfirm,
-        closeBalance,
-        setCloseBalance,
-        setShowCloseConfirm,
-        setCloseActionError,
-        handleCloseCashBox,
-        movementForm,
-        setMovementForm,
-        addingMovement,
-        movementError,
-        movementSuccess,
-        handleAddMovement,
-        handleMovementPage,
-      })}
     </div>
   )
 }
@@ -456,13 +506,15 @@ interface DetailRenderParams {
   setShowCloseConfirm: (v: boolean) => void
   setCloseActionError: (v: string | null) => void
   handleCloseCashBox: () => void
-  movementForm: { concept: string; amountCents: string; type: 'MANUAL_ADJUSTMENT' | 'WITHDRAWAL' }
-  setMovementForm: Dispatch<SetStateAction<{ concept: string; amountCents: string; type: 'MANUAL_ADJUSTMENT' | 'WITHDRAWAL' }>>
+  movementForm: { concept: string; amount: string; type: 'MANUAL_ADJUSTMENT' | 'WITHDRAWAL' }
+  setMovementForm: Dispatch<SetStateAction<{ concept: string; amount: string; type: 'MANUAL_ADJUSTMENT' | 'WITHDRAWAL' }>>
   addingMovement: boolean
   movementError: string | null
   movementSuccess: boolean
+  movementTypeFilter: string
   handleAddMovement: () => void
   handleMovementPage: (page: number) => void
+  handleMovementTypeFilter: (type: string) => void
 }
 
 function renderSelectedBoxDetail(params: DetailRenderParams) {
@@ -490,8 +542,10 @@ function renderSelectedBoxDetail(params: DetailRenderParams) {
     addingMovement,
     movementError,
     movementSuccess,
+    movementTypeFilter,
     handleAddMovement,
     handleMovementPage,
+    handleMovementTypeFilter,
   } = params
 
   if (!selectedBoxId) {
@@ -503,86 +557,12 @@ function renderSelectedBoxDetail(params: DetailRenderParams) {
     )
   }
 
+  const movementAmountCents = parseSolesAmountToCents(movementForm.amount)
+  const movementAmountInvalid = movementForm.amount.length > 0 && movementAmountCents === null
+  const canSubmitMovement = movementForm.concept.trim().length > 0 && movementAmountCents !== null && !addingMovement
+
   return (
     <div className="space-y-6">
-      {/* ── Summary Cards ─────────────────────────────────────────── */}
-      {summaryLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Card key={i}>
-              <CardHeader className="pb-2">
-                <CardDescription className="text-xs">Cargando...</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-6 bg-muted animate-pulse rounded" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : summaryError ? (
-        <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm" role="alert">
-          {summaryError}
-        </div>
-      ) : summary ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Ventas brutas */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription className="text-xs flex items-center gap-1">
-                <TrendingUp className="w-3 h-3" /> Ventas brutas
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-xl font-bold text-green-600 dark:text-green-400">
-                {formatCurrency(summary.grossSalesCents)}
-              </p>
-            </CardContent>
-          </Card>
-
-          {/* Costos / Compras — purchaseOutflowCents only, per design */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription className="text-xs flex items-center gap-1">
-                <ShoppingCart className="w-3 h-3" /> Costos / Compras
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-xl font-bold text-red-600 dark:text-red-400">
-                {formatCurrency(Math.abs(summary.purchaseOutflowCents))}
-              </p>
-            </CardContent>
-          </Card>
-
-          {/* Movimiento neto */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription className="text-xs flex items-center gap-1">
-                <Banknote className="w-3 h-3" /> Movimiento neto
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className={`text-xl font-bold ${summary.netMovementCents >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                {formatCurrency(summary.netMovementCents)}
-              </p>
-            </CardContent>
-          </Card>
-
-          {/* Saldo actual */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription className="text-xs flex items-center gap-1">
-                <Wallet className="w-3 h-3" /> Saldo actual
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-xl font-bold">
-                {formatCurrency(summary.currentBalanceCents)}
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      ) : null}
-
       {/* ── Caja status info ──────────────────────────────────────── */}
       {selectedBox && (
         <Card>
@@ -606,6 +586,28 @@ function renderSelectedBoxDetail(params: DetailRenderParams) {
           </CardHeader>
         </Card>
       )}
+
+      {/* ── Summary Cards ─────────────────────────────────────────── */}
+      {summaryLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i}>
+              <CardHeader className="pb-2">
+                <CardDescription className="text-xs">Cargando...</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-6 bg-muted animate-pulse rounded" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : summaryError ? (
+        <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm" role="alert">
+          {summaryError}
+        </div>
+      ) : summary ? (
+        <SummaryMetricsPanel summary={summary} />
+      ) : null}
 
       {/* ── Mutable Actions (only for current open caja) ──────────── */}
       {canMutateCashBox && (
@@ -723,14 +725,23 @@ function renderSelectedBoxDetail(params: DetailRenderParams) {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="movement-amount">Monto (centavos, positivo o negativo)</Label>
+                  <Label htmlFor="movement-amount">Monto (soles)</Label>
                   <Input
                     id="movement-amount"
                     type="number"
-                    placeholder="Ej: -50000 para un retiro"
-                    value={movementForm.amountCents}
-                    onChange={(e) => setMovementForm({ ...movementForm, amountCents: e.target.value })}
+                    inputMode="decimal"
+                    min="0.01"
+                    step="0.01"
+                    placeholder="Ej: 500.00"
+                    value={movementForm.amount}
+                    onChange={(e) => setMovementForm({ ...movementForm, amount: e.target.value })}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Ingresá siempre un monto positivo. El tipo de movimiento define si suma o resta.
+                  </p>
+                  {movementAmountInvalid && (
+                    <p className="text-xs text-destructive">Ingresá un monto mayor a 0 en soles.</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="movement-type">Tipo</Label>
@@ -746,7 +757,7 @@ function renderSelectedBoxDetail(params: DetailRenderParams) {
                 </div>
                 <Button
                   onClick={handleAddMovement}
-                  disabled={addingMovement || !movementForm.concept || !movementForm.amountCents}
+                  disabled={!canSubmitMovement}
                   className="gap-2"
                 >
                   <Plus className="w-4 h-4" />
@@ -775,10 +786,30 @@ function renderSelectedBoxDetail(params: DetailRenderParams) {
       {/* ── Movement History ──────────────────────────────────────── */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Banknote className="w-5 h-5" />
-            Historial de movimientos
-          </CardTitle>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Banknote className="w-5 h-5" />
+              Historial de movimientos
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="movement-type-filter" className="text-xs text-muted-foreground">
+                Filtrar por tipo
+              </Label>
+              <select
+                id="movement-type-filter"
+                value={movementTypeFilter}
+                onChange={(event) => handleMovementTypeFilter(event.target.value)}
+                className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
+              >
+                <option value="">Todos</option>
+                <option value="SALE_INCOME">Venta</option>
+                <option value="PURCHASE_OUTFLOW">Compra</option>
+                <option value="RETURN_OUTFLOW">Devolución</option>
+                <option value="MANUAL_ADJUSTMENT">Ajuste manual</option>
+                <option value="WITHDRAWAL">Retiro</option>
+              </select>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {movementsError ? (
@@ -807,6 +838,7 @@ function renderSelectedBoxDetail(params: DetailRenderParams) {
                       <th className="text-left py-3 px-4 font-medium">Concepto</th>
                       <th className="text-left py-3 px-4 font-medium">Tipo</th>
                       <th className="text-right py-3 px-4 font-medium">Monto</th>
+                      <th className="text-right py-3 px-4 font-medium">Ganancia</th>
                       <th className="text-right py-3 px-4 font-medium">Fecha</th>
                     </tr>
                   </thead>
@@ -826,6 +858,11 @@ function renderSelectedBoxDetail(params: DetailRenderParams) {
                         </td>
                         <td className={`py-3 px-4 text-sm text-right font-medium ${entry.amountCents >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                           {formatCurrency(entry.amountCents)}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-right font-medium">
+                          {entry.type === 'SALE_INCOME' && entry.profitCents !== null
+                            ? formatCurrency(entry.profitCents)
+                            : '—'}
                         </td>
                         <td className="py-3 px-4 text-xs text-right text-muted-foreground">
                           {formatDateTime(entry.createdAt)}
@@ -868,4 +905,61 @@ function renderSelectedBoxDetail(params: DetailRenderParams) {
       </Card>
     </div>
   )
+}
+
+function SummaryMetricsPanel({ summary }: { summary: CashBoxSummary }) {
+  const metrics: Array<{
+    label: string
+    value: number
+    tone: 'positive' | 'negative' | 'neutral' | 'strong'
+    icon: ReactNode
+  }> = [
+    { label: 'Saldo inicial', value: summary.openingBalanceCents, tone: 'neutral', icon: <Wallet className="w-3 h-3" /> },
+    { label: 'Ventas brutas', value: summary.grossSalesCents, tone: 'positive', icon: <TrendingUp className="w-3 h-3" /> },
+    { label: 'Compras', value: summary.purchaseOutflowCents, tone: 'negative', icon: <ShoppingCart className="w-3 h-3" /> },
+    { label: 'Devoluciones', value: summary.returnOutflowCents, tone: 'negative', icon: <ShoppingCart className="w-3 h-3" /> },
+    { label: 'Ingresos', value: summary.manualAdjustmentsCents, tone: summary.manualAdjustmentsCents >= 0 ? 'positive' : 'negative', icon: <Banknote className="w-3 h-3" /> },
+    { label: 'Retiros', value: summary.withdrawalsCents, tone: 'negative', icon: <Banknote className="w-3 h-3" /> },
+  ]
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <CardTitle className="text-base">Resumen de caja</CardTitle>
+            <CardDescription>Movimientos acumulados de la caja seleccionada.</CardDescription>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-muted-foreground">Saldo actual</p>
+            <p className="text-2xl font-bold">{formatCurrency(summary.currentBalanceCents)}</p>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+          {metrics.map((metric) => (
+            <div key={metric.label} className="rounded-md border bg-muted/20 px-3 py-2">
+              <dt className="flex items-center gap-1 text-xs text-muted-foreground">
+                {metric.icon}
+                {metric.label}
+              </dt>
+              <dd className={`mt-1 text-sm font-semibold ${summaryMetricToneClass(metric.tone)}`}>
+                {formatCurrency(metric.value)}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </CardContent>
+    </Card>
+  )
+}
+
+function summaryMetricToneClass(tone: 'positive' | 'negative' | 'neutral' | 'strong') {
+  return {
+    positive: 'text-green-600 dark:text-green-400',
+    negative: 'text-red-600 dark:text-red-400',
+    neutral: 'text-muted-foreground',
+    strong: 'text-foreground',
+  }[tone]
 }

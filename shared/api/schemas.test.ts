@@ -16,6 +16,7 @@ import {
   purchaseFormSchema,
   purchaseItemSchema,
   cashClosingFormSchema,
+  manualMovementFormSchema,
   productListQuerySchema,
   productListResponseSchema,
   productListMetaSchema,
@@ -339,6 +340,38 @@ describe('saleIdFormSchema', () => {
 
   it('rejects empty sale ID', () => {
     const result = saleIdFormSchema.safeParse({ saleId: '' })
+    expect(result.success).toBe(false)
+  })
+})
+
+describe('manualMovementFormSchema', () => {
+  it('accepts a positive amount in cents', () => {
+    const result = manualMovementFormSchema.safeParse({
+      concept: 'Retiro de prueba',
+      amountCents: 1050,
+      type: 'WITHDRAWAL',
+    })
+
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects zero amount', () => {
+    const result = manualMovementFormSchema.safeParse({
+      concept: 'Retiro de prueba',
+      amountCents: 0,
+      type: 'WITHDRAWAL',
+    })
+
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects negative amount', () => {
+    const result = manualMovementFormSchema.safeParse({
+      concept: 'Retiro de prueba',
+      amountCents: -1050,
+      type: 'WITHDRAWAL',
+    })
+
     expect(result.success).toBe(false)
   })
 })
@@ -1145,5 +1178,4 @@ describe('saleListSchema (PR3 — items[] contract)', () => {
     expect(result.success).toBe(false)
   })
 })
-
 

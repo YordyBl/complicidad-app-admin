@@ -99,7 +99,6 @@ const summaryFixture = {
   status: 'OPEN',
   openingBalanceCents: 10000,
   currentBalanceCents: 15000,
-  netMovementCents: 5000,
   grossSalesCents: 50000,
   purchaseOutflowCents: -30000,
   returnOutflowCents: -5000,

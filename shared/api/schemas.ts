@@ -328,7 +328,6 @@ export const cashBoxSummarySchema = z.object({
   status: z.string(),
   openingBalanceCents: z.number(),
   currentBalanceCents: z.number(),
-  netMovementCents: z.number(),
   grossSalesCents: z.number(),
   purchaseOutflowCents: z.number(),
   returnOutflowCents: z.number(),
@@ -372,7 +371,7 @@ export type MovementType = (typeof movementTypes)[number]
 
 export const manualMovementFormSchema = z.object({
   concept: z.string().min(1, 'El concepto es requerido'),
-  amountCents: z.number().int(),
+  amountCents: z.number().int().positive('El monto debe ser mayor a cero'),
   type: z.enum(movementTypes, {
     errorMap: () => ({ message: 'El tipo debe ser "MANUAL_ADJUSTMENT" o "WITHDRAWAL"' }),
   }),

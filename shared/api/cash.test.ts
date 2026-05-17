@@ -151,7 +151,6 @@ describe('getCashBoxSummary', () => {
       status: 'OPEN',
       openingBalanceCents: 10000,
       currentBalanceCents: 25000,
-      netMovementCents: 15000,
       grossSalesCents: 50000,
       purchaseOutflowCents: -20000,
       returnOutflowCents: -5000,
