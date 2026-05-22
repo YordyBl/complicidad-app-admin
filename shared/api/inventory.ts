@@ -10,7 +10,7 @@ import 'server-only'
  * - POST /api/v1/purchases         → Purchase
  */
 
-import { apiGet, apiPost } from './api-fetch'
+import { apiGet, apiPost, apiPatch } from './api-fetch'
 import type { ApiResult } from './api-fetch'
 import {
   productFormSchema,
@@ -18,6 +18,10 @@ import {
   purchaseItemSchema,
   productListQuerySchema,
   productListResponseSchema,
+  inventoryLotsResponseSchema,
+  increaseInventoryLotSchema,
+  editInventoryLotSchema,
+  compensateInventoryLotSchema,
   type ProductFormData,
   type ProductResponse,
   type SearchResult,
@@ -27,6 +31,10 @@ import {
   type ProductListResponse,
   type ProductListItem,
   type ProductListMeta,
+  type InventoryLotsResponse,
+  type IncreaseInventoryLotPayload,
+  type EditInventoryLotPayload,
+  type CompensateInventoryLotPayload,
 } from './schemas'
 
 // Re-export schemas and types for server-side consumers
@@ -36,6 +44,10 @@ export {
   purchaseItemSchema,
   productListQuerySchema,
   productListResponseSchema,
+  inventoryLotsResponseSchema,
+  increaseInventoryLotSchema,
+  editInventoryLotSchema,
+  compensateInventoryLotSchema,
   type ProductFormData,
   type ProductResponse,
   type SearchResult,
@@ -45,6 +57,10 @@ export {
   type ProductListResponse,
   type ProductListItem,
   type ProductListMeta,
+  type InventoryLotsResponse,
+  type IncreaseInventoryLotPayload,
+  type EditInventoryLotPayload,
+  type CompensateInventoryLotPayload,
 }
 
 // ── API functions ──────────────────────────────────────────────────
@@ -118,4 +134,96 @@ export async function getProductById(
   id: string,
 ): Promise<ApiResult<ProductListItem>> {
   return apiGet<ProductListItem>(`/products/${encodeURIComponent(id)}`)
+}
+
+// ── Lot API ────────────────────────────────────────────────────────
+
+export interface ActorHeaders {
+  [key: string]: string
+  'x-actor-id': string
+  'x-actor-source': string
+}
+
+/**
+ * List inventory lots with optional product/variant filtering.
+ *
+ * Server-only — fetches from GET /api/v1/inventory/lots.
+ * Query params: productId, variantId (optional).
+ * Response validated through Zod.
+ */
+export async function listInventoryLots(
+  params: { productId?: string; variantId?: string } = {},
+): Promise<ApiResult<InventoryLotsResponse>> {
+  const searchParams = new URLSearchParams()
+  if (params.productId) searchParams.set('productId', params.productId)
+  if (params.variantId) searchParams.set('variantId', params.variantId)
+  const qs = searchParams.toString()
+  const path = qs ? `/inventory/lots?${qs}` : '/inventory/lots'
+
+  const result = await apiGet<InventoryLotsResponse>(path)
+
+  if (result.ok) {
+    const parsed = inventoryLotsResponseSchema.safeParse(result.data)
+    if (parsed.success) {
+      return { ...result, data: parsed.data }
+    }
+    return {
+      ok: false,
+      error: {
+        error: 'SchemaValidationError',
+        message: `Invalid lot list response: ${parsed.error.message}`,
+        status: 502,
+      },
+    }
+  }
+
+  return result
+}
+
+/**
+ * Register a new lot intake (POST /inventory/lots/adjustments/increase).
+ * Requires actor context headers for attribution.
+ */
+export async function increaseInventoryLot(
+  body: IncreaseInventoryLotPayload,
+  actorHeaders: ActorHeaders,
+): Promise<ApiResult<Record<string, unknown>>> {
+  return apiPost<Record<string, unknown>>(
+    '/inventory/lots/adjustments/increase',
+    body,
+    actorHeaders,
+  )
+}
+
+/**
+ * Edit an intact lot (PATCH /inventory/lots/:lotId).
+ * Requires actor context headers for attribution.
+ */
+export async function editInventoryLot(
+  lotId: string,
+  body: EditInventoryLotPayload,
+  actorHeaders: ActorHeaders,
+): Promise<ApiResult<Record<string, unknown>>> {
+  return apiPatch<Record<string, unknown>>(
+    `/inventory/lots/${encodeURIComponent(lotId)}`,
+    body,
+    actorHeaders,
+  )
+}
+
+/**
+ * Create a compensating correction on a historical lot
+ * (POST /inventory/lots/:lotId/adjustments).
+ * Requires actor context headers for attribution.
+ */
+export async function compensateInventoryLot(
+  lotId: string,
+  body: CompensateInventoryLotPayload,
+  actorHeaders: ActorHeaders,
+): Promise<ApiResult<Record<string, unknown>>> {
+  return apiPost<Record<string, unknown>>(
+    `/inventory/lots/${encodeURIComponent(lotId)}/adjustments`,
+    body,
+    actorHeaders,
+  )
 }

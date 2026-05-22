@@ -45,3 +45,7 @@
 - [ ] 6.3 Run available non-build verification: typecheck, lint, and tests; treat failures as defects.
 - [ ] 6.4 Verify backend CORS with targeted preflight/request checks for allowed and rejected origins.
 - [ ] 6.5 Prepare Docker run/compose smoke plan; Docker image build verification requires explicit user approval before execution.
+
+## Phase 7: Corrections
+
+- [x] 7.1 Remove admin-role gating from inventory lots UI (`canAdjust=true` for all screen-authorized users, action rendering driven by `allowedAction`). — 2026-05-17

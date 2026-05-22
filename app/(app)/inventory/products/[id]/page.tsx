@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { Package, ArrowLeft, AlertCircle, AlertTriangle } from 'lucide-react'
+import { Package, ArrowLeft, AlertCircle, AlertTriangle, Layers } from 'lucide-react'
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
@@ -58,13 +58,23 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
 
     return (
       <div className="space-y-6">
-        <Link
-          href="/inventory"
-          className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'gap-1')}
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Volver a productos
-        </Link>
+        <div className="flex items-center gap-3 flex-wrap">
+          <Link
+            href="/inventory"
+            className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'gap-1')}
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Volver a productos
+          </Link>
+
+          <Link
+            href={`/inventory/lots?productId=${id}`}
+            className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'gap-1')}
+          >
+            <Layers className="w-4 h-4" />
+            Ver stock en lotes
+          </Link>
+        </div>
 
         <Card className="border-destructive/50 bg-destructive/5">
           <CardContent className="pt-6 pb-6">
@@ -88,13 +98,23 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
   // ── Success — Product detail ────────────────────────────
   return (
     <div className="space-y-6">
-      <Link
-        href="/inventory"
-        className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'gap-1')}
-      >
-        <ArrowLeft className="w-4 h-4" />
-        Volver a productos
-      </Link>
+      <div className="flex items-center gap-3 flex-wrap">
+        <Link
+          href="/inventory"
+          className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'gap-1')}
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Volver a productos
+        </Link>
+
+        <Link
+          href={`/inventory/lots?productId=${product.id}`}
+          className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'gap-1')}
+        >
+          <Layers className="w-4 h-4" />
+          Ver stock en lotes
+        </Link>
+      </div>
 
       {/* Product info */}
       <Card>
@@ -165,6 +185,7 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
                     <th className="pb-3 font-medium text-muted-foreground">SKU</th>
                     <th className="pb-3 font-medium text-muted-foreground">Atributos</th>
                     <th className="pb-3 font-medium text-muted-foreground">Estado</th>
+                    <th className="pb-3 font-medium text-muted-foreground text-right">Lotes</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -197,6 +218,17 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
                         >
                           {variant.isActive ? 'Activo' : 'Inactivo'}
                         </span>
+                      </td>
+                      <td className="py-3 text-right">
+                        <Link
+                          href={`/inventory/lots?productId=${product.id}&variantId=${variant.id}`}
+                          className={cn(
+                            buttonVariants({ variant: 'ghost', size: 'sm' }),
+                            'text-xs h-7',
+                          )}
+                        >
+                          Ver lotes
+                        </Link>
                       </td>
                     </tr>
                   ))}

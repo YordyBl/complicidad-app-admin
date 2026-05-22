@@ -47,6 +47,7 @@ import {
   apiGet,
   apiPost,
   apiPut,
+  apiPatch,
   getBearerToken,
 } from './api-fetch'
 
@@ -330,6 +331,95 @@ describe('apiPut', () => {
         method: 'PUT',
         headers: expect.objectContaining({ Authorization: 'Bearer put-jwt' }),
         body: JSON.stringify({ name: 'Updated' }),
+      }),
+    )
+  })
+})
+
+// ── apiPatch — PATCH support + custom header merging ──────────────
+
+describe('apiPatch', () => {
+  it('sends PATCH request with bearer token and body', async () => {
+    cookieMap.set('test_session', 'patch-jwt')
+    mockFetchResponse(200, { id: 'lot-1', quantity: 20 })
+
+    const result = await apiPatch('/inventory/lots/lot-1', { quantity: 20 })
+
+    expect(result.ok).toBe(true)
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/inventory/lots/lot-1'),
+      expect.objectContaining({
+        method: 'PATCH',
+        headers: expect.objectContaining({ Authorization: 'Bearer patch-jwt' }),
+        body: JSON.stringify({ quantity: 20 }),
+      }),
+    )
+  })
+
+  it('merges custom headers with bearer token via apiFetch customHeaders', async () => {
+    cookieMap.set('test_session', 'actor-jwt')
+    mockFetchResponse(201, { ok: true })
+
+    const result = await apiFetch('/inventory/lots/adjustments/increase', {
+      method: 'POST',
+      body: { variantId: 'var-1', quantity: 10 },
+      bearerToken: 'actor-jwt',
+      customHeaders: {
+        'x-actor-id': 'user-1',
+        'x-actor-source': 'complicidad-app-admin',
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/inventory/lots/adjustments/increase'),
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          Authorization: 'Bearer actor-jwt',
+          'x-actor-id': 'user-1',
+          'x-actor-source': 'complicidad-app-admin',
+          'Content-Type': 'application/json',
+        }),
+        body: JSON.stringify({ variantId: 'var-1', quantity: 10 }),
+      }),
+    )
+  })
+
+  it('supports custom headers without bearer token', async () => {
+    mockFetchResponse(200, { data: 'ok' })
+
+    await apiFetch('/public/endpoint', {
+      customHeaders: { 'x-custom': 'value' },
+    })
+
+    expect(fetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'x-custom': 'value' }),
+      }),
+    )
+  })
+
+  it('apiPatch forwards customHeaders to apiFetch', async () => {
+    cookieMap.set('test_session', 'actor-jwt')
+    mockFetchResponse(200, { ok: true })
+
+    await apiPatch('/inventory/lots/lot-1', { quantity: 20 }, {
+      'x-actor-id': 'user-1',
+      'x-actor-source': 'complicidad-app-admin',
+    })
+
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/inventory/lots/lot-1'),
+      expect.objectContaining({
+        method: 'PATCH',
+        headers: expect.objectContaining({
+          Authorization: 'Bearer actor-jwt',
+          'x-actor-id': 'user-1',
+          'x-actor-source': 'complicidad-app-admin',
+        }),
+        body: JSON.stringify({ quantity: 20 }),
       }),
     )
   })

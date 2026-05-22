@@ -39,7 +39,7 @@ export type ApiResult<T> = ApiSuccess<T> | ApiFailure
 
 const DEFAULT_TIMEOUT_MS = 15_000
 
-function buildHeaders(bearerToken?: string): HeadersInit {
+function buildHeaders(bearerToken?: string): Record<string, string> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     Accept: 'application/json',
@@ -62,15 +62,16 @@ export async function getBearerToken(): Promise<string | null> {
   }
 }
 
-/** Core fetch wrapper — always server-side. */
+/** Default fetch options — always server-side. */
 export async function apiFetch<T>(
   path: string,
   options: {
-    method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
+    method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
     body?: unknown
     bearerToken?: string | null
     cache?: RequestCache
     timeoutMs?: number
+    customHeaders?: Record<string, string>
   } = {},
 ): Promise<ApiResult<T>> {
   const {
@@ -79,6 +80,7 @@ export async function apiFetch<T>(
     bearerToken,
     cache = 'no-store',
     timeoutMs = DEFAULT_TIMEOUT_MS,
+    customHeaders,
   } = options
 
   const url = `${env.API_BASE_URL}/api/v1${path}`
@@ -87,9 +89,18 @@ export async function apiFetch<T>(
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
+    const headers = buildHeaders(bearerToken ?? undefined)
+
+    // Merge custom headers (actor metadata, etc.)
+    if (customHeaders) {
+      for (const [key, value] of Object.entries(customHeaders)) {
+        headers[key] = value
+      }
+    }
+
     const res = await fetch(url, {
       method,
-      headers: buildHeaders(bearerToken ?? undefined),
+      headers,
       body: body ? JSON.stringify(body) : undefined,
       cache,
       signal: controller.signal,
@@ -162,13 +173,14 @@ export async function apiGet<T>(
   return apiFetch<T>(path, { method: 'GET', bearerToken: token, cache })
 }
 
-/** Convenience: POST request with auto bearer injection. */
+/** Convenience: POST request with auto bearer injection and optional custom headers. */
 export async function apiPost<T>(
   path: string,
   body: unknown,
+  customHeaders?: Record<string, string>,
 ): Promise<ApiResult<T>> {
   const token = await getBearerToken()
-  return apiFetch<T>(path, { method: 'POST', body, bearerToken: token })
+  return apiFetch<T>(path, { method: 'POST', body, bearerToken: token, customHeaders })
 }
 
 /** Convenience: PUT request with auto bearer injection. */
@@ -178,4 +190,14 @@ export async function apiPut<T>(
 ): Promise<ApiResult<T>> {
   const token = await getBearerToken()
   return apiFetch<T>(path, { method: 'PUT', body, bearerToken: token })
+}
+
+/** Convenience: PATCH request with auto bearer injection and optional custom headers. */
+export async function apiPatch<T>(
+  path: string,
+  body: unknown,
+  customHeaders?: Record<string, string>,
+): Promise<ApiResult<T>> {
+  const token = await getBearerToken()
+  return apiFetch<T>(path, { method: 'PATCH', body, bearerToken: token, customHeaders })
 }

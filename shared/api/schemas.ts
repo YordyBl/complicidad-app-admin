@@ -530,6 +530,80 @@ export const productListMetaSchema = z.object({
 
 export type ProductListMeta = z.infer<typeof productListMetaSchema>
 
+// ── Inventory Lot schemas ──────────────────────────────────────────
+
+/** Allowed action for a lot in the inventory operational view. */
+export const INVENTORY_LOT_ALLOWED_ACTIONS = ['edit', 'compensate', 'none'] as const
+export type InventoryLotAllowedAction = (typeof INVENTORY_LOT_ALLOWED_ACTIONS)[number]
+
+/** Canonical lot read model. */
+export const inventoryLotRowSchema = z.object({
+  lotId: z.string().min(1),
+  variantId: z.string().min(1),
+  productId: z.string().min(1),
+  productName: z.string().min(1),
+  sku: z.string().min(1),
+  attributes: z.record(z.string(), z.string()),
+  purchasedQuantity: z.number().int().min(0),
+  remainingQuantity: z.number().int().min(0),
+  unitCost: z.number(),
+  purchaseDate: z.string().min(1),
+  state: z.enum(['INTACT', 'HISTORICAL', 'EXHAUSTED']),
+  allowedAction: z.enum(INVENTORY_LOT_ALLOWED_ACTIONS),
+  reasonHint: z.string().nullable().optional(),
+}).passthrough()
+
+export type InventoryLotRow = z.infer<typeof inventoryLotRowSchema>
+
+/** Response from GET /inventory/lots. */
+export const inventoryLotsResponseSchema = z.object({
+  product: z.object({
+    id: z.string(),
+    name: z.string(),
+  }).nullable(),
+  variants: z.array(z.object({
+    variantId: z.string().min(1),
+    sku: z.string().min(1),
+    attributes: z.record(z.string(), z.string()),
+    stock: z.number().int(),
+    lots: z.array(inventoryLotRowSchema),
+  })),
+}).passthrough()
+
+export type InventoryLotsResponse = z.infer<typeof inventoryLotsResponseSchema>
+
+/** POST /inventory/lots/adjustments/increase payload. */
+export const increaseInventoryLotSchema = z.object({
+  variantId: z.string().min(1, 'La variante es requerida'),
+  quantity: z.number().int().min(1, 'La cantidad debe ser al menos 1'),
+  unitCost: z.number().min(0).optional(),
+  reason: z.string().optional(),
+  effectiveAt: z.string().optional(),
+})
+
+export type IncreaseInventoryLotPayload = z.infer<typeof increaseInventoryLotSchema>
+
+/** PATCH /inventory/lots/:lotId payload. */
+export const editInventoryLotSchema = z.object({
+  variantId: z.string().min(1, 'La variante es requerida'),
+  quantity: z.number().int().min(0).optional(),
+  unitCost: z.number().min(0).optional(),
+  reason: z.string().optional(),
+  effectiveAt: z.string().optional(),
+})
+
+export type EditInventoryLotPayload = z.infer<typeof editInventoryLotSchema>
+
+/** POST /inventory/lots/:lotId/adjustments payload. */
+export const compensateInventoryLotSchema = z.object({
+  quantityDelta: z.number().int().refine((v) => v !== 0, 'El delta debe ser distinto de cero').optional(),
+  unitCost: z.number().min(0).optional(),
+  reason: z.string().min(1, 'El motivo es requerido para la compensación'),
+  effectiveAt: z.string().optional(),
+})
+
+export type CompensateInventoryLotPayload = z.infer<typeof compensateInventoryLotSchema>
+
 export const productListResponseSchema = z.object({
   data: z.array(productListItemSchema),
   meta: productListMetaSchema,

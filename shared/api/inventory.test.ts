@@ -40,7 +40,7 @@ vi.mock('next/headers', () => ({
 
 // ── Imports ────────────────────────────────────────────────────────
 
-import { listProducts, getProductById } from './inventory'
+import { listProducts, getProductById, listInventoryLots, increaseInventoryLot, editInventoryLot, compensateInventoryLot } from './inventory'
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -239,5 +239,215 @@ describe('getProductById', () => {
       expect.stringContaining('/api/v1/products/prod-1'),
       expect.anything(),
     )
+  })
+})
+
+// ── Lot API client tests ───────────────────────────────────────────
+
+const validVariantLotBlock = {
+  variantId: 'var-001',
+  sku: 'CAM-CLA-M',
+  attributes: { color: 'Blanco', size: 'M' },
+  stock: 30,
+  lots: [
+    {
+      lotId: 'lot-001',
+      variantId: 'var-001',
+      productId: 'prod-001',
+      productName: 'Camiseta Clásica',
+      sku: 'CAM-CLA-M',
+      attributes: { color: 'Blanco', size: 'M' },
+      purchasedQuantity: 50,
+      remainingQuantity: 30,
+      unitCost: 250.5,
+      purchaseDate: '2026-01-15T10:00:00.000Z',
+      state: 'INTACT' as const,
+      allowedAction: 'edit' as const,
+      reasonHint: null,
+    },
+  ],
+}
+
+const validLotsResponse = {
+  product: { id: 'prod-001', name: 'Camiseta Clásica' },
+  variants: [validVariantLotBlock],
+}
+
+const mockActorHeaders = {
+  'x-actor-id': 'user-test',
+  'x-actor-source': 'complicidad-app-admin',
+}
+
+describe('listInventoryLots', () => {
+  it('calls GET /inventory/lots with no query when empty params', async () => {
+    mockFetchResponse(200, validLotsResponse)
+
+    const result = await listInventoryLots({})
+
+    expect(result.ok).toBe(true)
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/v1/inventory/lots',
+      expect.objectContaining({ method: 'GET' }),
+    )
+  })
+
+  it('calls GET /inventory/lots with productId query param', async () => {
+    mockFetchResponse(200, { ...validLotsResponse, product: { id: 'prod-001', name: 'Camiseta Clásica' } })
+
+    const result = await listInventoryLots({ productId: 'prod-001' })
+
+    expect(result.ok).toBe(true)
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('productId=prod-001'),
+      expect.anything(),
+    )
+  })
+
+  it('calls GET /inventory/lots with variantId query param', async () => {
+    mockFetchResponse(200, { product: null, variants: [validVariantLotBlock] })
+
+    const result = await listInventoryLots({ variantId: 'var-001' })
+
+    expect(result.ok).toBe(true)
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('variantId=var-001'),
+      expect.anything(),
+    )
+  })
+
+  it('returns typed data with variants and lots', async () => {
+    mockFetchResponse(200, validLotsResponse)
+
+    const result = await listInventoryLots({})
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.data.variants).toHaveLength(1)
+      expect(result.data.variants[0].lots).toHaveLength(1)
+      expect(result.data.variants[0].lots[0].lotId).toBe('lot-001')
+      expect(result.data.variants[0].lots[0].state).toBe('INTACT')
+    }
+  })
+
+  it('returns failure on API error', async () => {
+    mockFetchResponse(400, { error: 'ValidationError', message: 'Invalid productId' })
+
+    const result = await listInventoryLots({ productId: 'bad-id' })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error.error).toBe('ValidationError')
+    }
+  })
+
+  it('responds with empty variants on no lots', async () => {
+    mockFetchResponse(200, { product: null, variants: [] })
+
+    const result = await listInventoryLots({})
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.data.variants).toEqual([])
+    }
+  })
+})
+
+describe('increaseInventoryLot', () => {
+  const validPayload = { variantId: 'var-001', quantity: 25, unitCost: 300, reason: 'Nuevo ingreso' }
+
+  it('POSTs to /inventory/lots/adjustments/increase', async () => {
+    mockFetchResponse(201, { lotId: 'new-lot-1' })
+
+    const result = await increaseInventoryLot(validPayload, mockActorHeaders)
+
+    expect(result.ok).toBe(true)
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/inventory/lots/adjustments/increase'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify(validPayload),
+        headers: expect.objectContaining({
+          'Content-Type': 'application/json',
+          'x-actor-id': 'user-test',
+          'x-actor-source': 'complicidad-app-admin',
+        }),
+      }),
+    )
+  })
+
+  it('returns error on backend rejection', async () => {
+    mockFetchResponse(409, { error: 'ConflictError', message: 'Stock insuficiente' })
+
+    const result = await increaseInventoryLot(validPayload, mockActorHeaders)
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error.status).toBe(409)
+      expect(result.error.message).toBe('Stock insuficiente')
+    }
+  })
+})
+
+describe('editInventoryLot', () => {
+  const validPayload = { variantId: 'var-001', quantity: 20, reason: 'Ajuste de cantidad' }
+
+  it('PATCHes /inventory/lots/:lotId', async () => {
+    mockFetchResponse(200, { lotId: 'lot-001', quantity: 20 })
+
+    const result = await editInventoryLot('lot-001', validPayload, mockActorHeaders)
+
+    expect(result.ok).toBe(true)
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/inventory/lots/lot-001'),
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify(validPayload),
+        headers: expect.objectContaining({
+          'x-actor-id': 'user-test',
+          'x-actor-source': 'complicidad-app-admin',
+        }),
+      }),
+    )
+  })
+
+  it('returns error on 404 lot not found', async () => {
+    mockFetchResponse(404, { error: 'NotFound', message: 'Lote no encontrado' })
+
+    const result = await editInventoryLot('no-exist', validPayload, mockActorHeaders)
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error.status).toBe(404)
+    }
+  })
+})
+
+describe('compensateInventoryLot', () => {
+  const validPayload = { quantityDelta: 5, reason: 'Compensación manual' }
+
+  it('POSTs to /inventory/lots/:lotId/adjustments', async () => {
+    mockFetchResponse(200, { adjustmentId: 'adj-1', lotId: 'lot-hist' })
+
+    const result = await compensateInventoryLot('lot-hist', validPayload, mockActorHeaders)
+
+    expect(result.ok).toBe(true)
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/inventory/lots/lot-hist/adjustments'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify(validPayload),
+        headers: expect.objectContaining({
+          'x-actor-id': 'user-test',
+          'x-actor-source': 'complicidad-app-admin',
+        }),
+      }),
+    )
+  })
+
+  it('returns error on business rule rejection', async () => {
+    mockFetchResponse(422, { error: 'BusinessRuleError', message: 'Solo se permite compensación en lotes históricos' })
+
+    const result = await compensateInventoryLot('lot-intact', validPayload, mockActorHeaders)
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error.error).toBe('BusinessRuleError')
+      expect(result.error.status).toBe(422)
+    }
   })
 })

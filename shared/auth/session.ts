@@ -100,6 +100,37 @@ export async function redirectIfAuthenticated(): Promise<void> {
   }
 }
 
+// ── Actor context for lot mutations ────────────────────────────────
+
+export interface ActorContext {
+  actorId: string
+  actorSource: string
+}
+
+export interface ActorContextError {
+  error: string
+}
+
+/**
+ * Derive actor context from the current session for inventory lot writes.
+ *
+ * Returns `{ actorId: session.user.id, actorSource: 'complicidad-app-admin' }`
+ * on success. If the session is absent, invalid, or the user has no id,
+ * returns an error object with a visible failure message.
+ *
+ * Server-side only — never expose in client components.
+ */
+export async function requireActorContext(): Promise<ActorContext | ActorContextError> {
+  const session = await getSession()
+  if (!session || !session.user?.id) {
+    return { error: 'No autorizado: sesión no encontrada o inválida' }
+  }
+  return {
+    actorId: session.user.id,
+    actorSource: 'complicidad-app-admin',
+  }
+}
+
 // ── Backend auth gap documentation ─────────────────────────────────
 
 /**

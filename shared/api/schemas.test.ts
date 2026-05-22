@@ -24,6 +24,15 @@ import {
   saleListEntrySchema,
   type SaleListEntry,
   type SaleListItemDisplay,
+  // ── Lot schemas (task 1.2) ──
+  inventoryLotRowSchema,
+  inventoryLotsResponseSchema,
+  increaseInventoryLotSchema,
+  editInventoryLotSchema,
+  compensateInventoryLotSchema,
+  type InventoryLotRow,
+  type InventoryLotAllowedAction,
+  type InventoryLotsResponse,
 } from './schemas'
 
 // ── Auth schemas ──────────────────────────────────────────────────
@@ -1122,6 +1131,315 @@ describe('saleListEntrySchema', () => {
       extraField: 'ignored',
     })
     expect(result.success).toBe(true)
+  })
+})
+
+// ── Inventory Lot schemas ──────────────────────────────────────────
+
+describe('inventoryLotRowSchema', () => {
+  const validLot: InventoryLotRow = {
+    lotId: 'lot-001',
+    variantId: 'var-001',
+    productId: 'prod-001',
+    productName: 'Camiseta Clásica',
+    sku: 'CAM-CLA-M',
+    attributes: { color: 'Blanco', size: 'M' },
+    purchasedQuantity: 50,
+    remainingQuantity: 30,
+    unitCost: 250.5,
+    purchaseDate: '2026-01-15T10:00:00.000Z',
+    state: 'INTACT',
+    allowedAction: 'edit',
+    reasonHint: null,
+  }
+
+  it('validates a complete INTACT lot with edit permission', () => {
+    const result = inventoryLotRowSchema.safeParse(validLot)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.lotId).toBe('lot-001')
+      expect(result.data.variantId).toBe('var-001')
+      expect(result.data.productName).toBe('Camiseta Clásica')
+      expect(result.data.state).toBe('INTACT')
+      expect(result.data.allowedAction).toBe('edit')
+      expect(result.data.purchasedQuantity).toBe(50)
+      expect(result.data.remainingQuantity).toBe(30)
+      expect(result.data.unitCost).toBe(250.5)
+    }
+  })
+
+  it('validates a HISTORICAL lot with compensation-only action', () => {
+    const historical = {
+      ...validLot,
+      lotId: 'lot-hist',
+      state: 'HISTORICAL',
+      allowedAction: 'compensate',
+      reasonHint: 'Ajuste por auditoría 2025 Q4',
+    } satisfies InventoryLotRow
+    const result = inventoryLotRowSchema.safeParse(historical)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.state).toBe('HISTORICAL')
+      expect(result.data.allowedAction).toBe('compensate')
+      expect(result.data.reasonHint).toBe('Ajuste por auditoría 2025 Q4')
+    }
+  })
+
+  it('validates EXHAUSTED lot with no allowed action', () => {
+    const exhausted = {
+      ...validLot,
+      lotId: 'lot-exh',
+      state: 'EXHAUSTED',
+      allowedAction: 'none',
+      remainingQuantity: 0,
+    } satisfies InventoryLotRow
+    const result = inventoryLotRowSchema.safeParse(exhausted)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.state).toBe('EXHAUSTED')
+      expect(result.data.allowedAction).toBe('none')
+      expect(result.data.remainingQuantity).toBe(0)
+    }
+  })
+
+  it('accepts passthrough extra fields', () => {
+    const result = inventoryLotRowSchema.safeParse({
+      ...validLot,
+      extraBackendField: 'should be ignored',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects an empty lotId', () => {
+    const result = inventoryLotRowSchema.safeParse({ ...validLot, lotId: '' })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects an invalid state value', () => {
+    const result = inventoryLotRowSchema.safeParse({ ...validLot, state: 'DAMAGED' })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects an invalid allowedAction value', () => {
+    const result = inventoryLotRowSchema.safeParse({ ...validLot, allowedAction: 'delete' })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects missing productName', () => {
+    const { productName, ...without } = validLot
+    const result = inventoryLotRowSchema.safeParse(without)
+    expect(result.success).toBe(false)
+  })
+})
+
+describe('inventoryLotsResponseSchema', () => {
+  const validResponse: InventoryLotsResponse = {
+    product: { id: 'prod-001', name: 'Camiseta Clásica' },
+    variants: [
+      {
+        variantId: 'var-001',
+        sku: 'CAM-CLA-M',
+        attributes: { color: 'Blanco', size: 'M' },
+        stock: 30,
+        lots: [
+          {
+            lotId: 'lot-001',
+            variantId: 'var-001',
+            productId: 'prod-001',
+            productName: 'Camiseta Clásica',
+            sku: 'CAM-CLA-M',
+            attributes: { color: 'Blanco', size: 'M' },
+            purchasedQuantity: 50,
+            remainingQuantity: 30,
+            unitCost: 250.5,
+            purchaseDate: '2026-01-15T10:00:00.000Z',
+            state: 'INTACT',
+            allowedAction: 'edit',
+            reasonHint: null,
+          },
+        ],
+      },
+    ],
+  }
+
+  it('validates a complete response with product and variant level lots', () => {
+    const result = inventoryLotsResponseSchema.safeParse(validResponse)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.product).toEqual({ id: 'prod-001', name: 'Camiseta Clásica' })
+      expect(result.data.variants).toHaveLength(1)
+      expect(result.data.variants[0].lots).toHaveLength(1)
+      expect(result.data.variants[0].lots[0].state).toBe('INTACT')
+      expect(result.data.variants[0].stock).toBe(30)
+    }
+  })
+
+  it('validates null product (no context)', () => {
+    const result = inventoryLotsResponseSchema.safeParse({
+      ...validResponse,
+      product: null,
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.product).toBeNull()
+    }
+  })
+
+  it('validates empty variants array', () => {
+    const result = inventoryLotsResponseSchema.safeParse({
+      product: { id: 'prod-001', name: 'Test' },
+      variants: [],
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.variants).toHaveLength(0)
+    }
+  })
+
+  it('validates a variant with empty lots array', () => {
+    const result = inventoryLotsResponseSchema.safeParse({
+      ...validResponse,
+      variants: [{ ...validResponse.variants[0], lots: [] }],
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects missing variants array', () => {
+    const { variants, ...without } = validResponse
+    const result = inventoryLotsResponseSchema.safeParse(without)
+    expect(result.success).toBe(false)
+  })
+})
+
+describe('increaseInventoryLotSchema', () => {
+  const validPayload = {
+    variantId: 'var-001',
+    quantity: 25,
+    unitCost: 300,
+    reason: 'Nuevo ingreso de mercadería',
+    effectiveAt: '2026-05-17',
+  }
+
+  it('validates a complete increase payload', () => {
+    const result = increaseInventoryLotSchema.safeParse(validPayload)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.variantId).toBe('var-001')
+      expect(result.data.quantity).toBe(25)
+      expect(result.data.unitCost).toBe(300)
+      expect(result.data.reason).toBe('Nuevo ingreso de mercadería')
+    }
+  })
+
+  it('validates without optional unitCost', () => {
+    const { unitCost, ...without } = validPayload
+    const result = increaseInventoryLotSchema.safeParse(without)
+    expect(result.success).toBe(true)
+  })
+
+  it('validates without optional effectiveAt', () => {
+    const { effectiveAt, ...without } = validPayload
+    const result = increaseInventoryLotSchema.safeParse(without)
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects missing quantity', () => {
+    const { quantity, ...without } = validPayload
+    const result = increaseInventoryLotSchema.safeParse(without)
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects quantity less than 1', () => {
+    const result = increaseInventoryLotSchema.safeParse({ ...validPayload, quantity: 0 })
+    expect(result.success).toBe(false)
+  })
+})
+
+describe('editInventoryLotSchema', () => {
+  const validPayload = {
+    variantId: 'var-001',
+    quantity: 20,
+    unitCost: 280,
+    reason: 'Corrección de costo unitario',
+    effectiveAt: '2026-05-17',
+  }
+
+  it('validates a complete edit payload', () => {
+    const result = editInventoryLotSchema.safeParse(validPayload)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.variantId).toBe('var-001')
+      expect(result.data.quantity).toBe(20)
+      expect(result.data.unitCost).toBe(280)
+    }
+  })
+
+  it('validates partial edit (only quantity)', () => {
+    const { unitCost, ...partial } = validPayload
+    const result = editInventoryLotSchema.safeParse(partial)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.quantity).toBe(20)
+      expect((result.data as Record<string, unknown>).unitCost).toBeUndefined()
+    }
+  })
+
+  it('validates partial edit (only unitCost)', () => {
+    const { quantity, ...partial } = validPayload
+    const result = editInventoryLotSchema.safeParse({ ...partial, quantity: undefined })
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects negative quantity', () => {
+    const result = editInventoryLotSchema.safeParse({ ...validPayload, quantity: -5 })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects missing variantId', () => {
+    const { variantId, ...without } = validPayload
+    const result = editInventoryLotSchema.safeParse(without)
+    expect(result.success).toBe(false)
+  })
+})
+
+describe('compensateInventoryLotSchema', () => {
+  const validPayload = {
+    quantityDelta: 10,
+    unitCost: 350,
+    reason: 'Compensación por diferencia de inventario Q1',
+    effectiveAt: '2026-05-17',
+  }
+
+  it('validates a complete compensation payload', () => {
+    const result = compensateInventoryLotSchema.safeParse(validPayload)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.quantityDelta).toBe(10)
+      expect(result.data.unitCost).toBe(350)
+    }
+  })
+
+  it('validates without optional quantityDelta', () => {
+    const { quantityDelta, ...without } = validPayload
+    const result = compensateInventoryLotSchema.safeParse(without)
+    expect(result.success).toBe(true)
+  })
+
+  it('validates without optional effectiveAt', () => {
+    const { effectiveAt, ...without } = validPayload
+    const result = compensateInventoryLotSchema.safeParse(without)
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects missing reason', () => {
+    const { reason, ...without } = validPayload
+    const result = compensateInventoryLotSchema.safeParse(without)
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects zero quantityDelta (must be non-zero when present)', () => {
+    const result = compensateInventoryLotSchema.safeParse({ ...validPayload, quantityDelta: 0 })
+    expect(result.success).toBe(false)
   })
 })
 

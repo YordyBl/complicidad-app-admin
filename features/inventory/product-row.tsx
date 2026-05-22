@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/accordion'
 import { cn } from '@/lib/utils'
 import { formatPrice } from '@/shared/api/formatters'
+import { buttonVariants } from '@/components/ui/button'
 
 import type { ProductListItem } from '@/shared/api/schemas'
 
@@ -83,6 +84,7 @@ export function ProductRow({ product }: ProductRowProps) {
                   <th className="pb-2 font-medium hidden sm:table-cell">Atributos</th>
                   <th className="pb-2 font-medium text-right">Stock</th>
                   <th className="pb-2 font-medium text-right">Precio venta</th>
+                  <th className="pb-2 font-medium text-right">Lotes</th>
                 </tr>
               </thead>
               <tbody>
@@ -115,6 +117,17 @@ export function ProductRow({ product }: ProductRowProps) {
                     </td>
                     <td className="py-2 text-right tabular-nums text-muted-foreground">
                       {formatPrice(product.salePrice)}
+                    </td>
+                    <td className="py-2 text-right">
+                      <Link
+                        href={`/inventory/lots?productId=${product.id}&variantId=${variant.id}`}
+                        className={cn(
+                          buttonVariants({ variant: 'ghost', size: 'sm' }),
+                          'text-xs h-6 px-2',
+                        )}
+                      >
+                        Ver lotes
+                      </Link>
                     </td>
                   </tr>
                 ))}

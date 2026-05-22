@@ -189,14 +189,14 @@ export function ProductForm() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Sale Price */}
             <div className="space-y-2">
-              <Label htmlFor="salePrice">Precio de venta ($) <span className="text-destructive">*</span></Label>
+              <Label htmlFor="salePrice">Precio de venta <span className="text-destructive">*</span></Label>
               <Input id="salePrice" type="number" min="0" step="0.01" placeholder="Ej: 1500.00" disabled={isSubmitting} {...register('salePrice', { valueAsNumber: true })} />
               <FormFieldError message={errors.salePrice?.message} />
             </div>
 
             {/* Presale Price (optional) */}
             <div className="space-y-2">
-              <Label htmlFor="presalePrice">Precio de preventa ($) (opcional)</Label>
+              <Label htmlFor="presalePrice">Precio de preventa (opcional)</Label>
               <Input id="presalePrice" type="number" min="0" step="0.01" placeholder="Ej: 1200.00" disabled={isSubmitting} {...register('presalePrice', { valueAsNumber: true })} />
             </div>
           </div>

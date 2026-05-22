@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { Package, Search, ShoppingCart, Plus, AlertTriangle, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Package, Search, ShoppingCart, Plus, AlertTriangle, AlertCircle, ChevronLeft, ChevronRight, Layers } from 'lucide-react'
 
 import { Input } from '@/components/ui/input'
 
@@ -41,7 +41,7 @@ export default async function InventoryPage({ searchParams }: InventoryPageProps
         </div>
 
         {/* Action cards still visible */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Link href="/inventory/products/new">
             <Card className="hover:border-primary/50 transition-colors cursor-pointer h-full">
               <CardHeader>
@@ -65,6 +65,20 @@ export default async function InventoryPage({ searchParams }: InventoryPageProps
                 <CardTitle className="text-base">Registrar compra</CardTitle>
                 <CardDescription>
                   Registrar una nueva compra de inventario asociada a una variante.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link href="/inventory/lots">
+            <Card className="hover:border-primary/50 transition-colors cursor-pointer h-full">
+              <CardHeader>
+                <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center mb-3">
+                  <Layers className="w-5 h-5 text-primary" />
+                </div>
+                <CardTitle className="text-base">Ver stock en lotes</CardTitle>
+                <CardDescription>
+                  Consultar y gestionar el stock por lotes con ajustes de inventario.
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -115,7 +129,7 @@ export default async function InventoryPage({ searchParams }: InventoryPageProps
       </div>
 
       {/* Action cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Link href="/inventory/products/new">
           <Card className="hover:border-primary/50 transition-colors cursor-pointer h-full">
             <CardHeader>
@@ -139,6 +153,20 @@ export default async function InventoryPage({ searchParams }: InventoryPageProps
               <CardTitle className="text-base">Registrar compra</CardTitle>
               <CardDescription>
                 Registrar una nueva compra de inventario asociada a una variante.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+
+        <Link href="/inventory/lots">
+          <Card className="hover:border-primary/50 transition-colors cursor-pointer h-full">
+            <CardHeader>
+              <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center mb-3">
+                <Layers className="w-5 h-5 text-primary" />
+              </div>
+              <CardTitle className="text-base">Ver stock en lotes</CardTitle>
+              <CardDescription>
+                Consultar y gestionar el stock por lotes con ajustes de inventario.
               </CardDescription>
             </CardHeader>
           </Card>

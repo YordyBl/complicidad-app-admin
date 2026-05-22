@@ -204,3 +204,103 @@ describe('ProductDetailPage', () => {
     )
   })
 })
+
+// ═══════════════════════════════════════════════════════════════
+// Lot entrypoints — CTA into /inventory/lots with context
+// ═══════════════════════════════════════════════════════════════
+
+describe('ProductDetailPage — lots entrypoints', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('renders "Ver stock en lotes" action button', async () => {
+    mockGetProductById.mockResolvedValue(successResponse())
+
+    await renderPage()
+
+    expect(screen.getByText('Ver stock en lotes')).toBeInTheDocument()
+  })
+
+  it('product-level CTA links to /inventory/lots with productId', async () => {
+    mockGetProductById.mockResolvedValue(successResponse())
+
+    await renderPage()
+
+    const cta = screen.getByText('Ver stock en lotes')
+    const link = cta.closest('a')
+    expect(link).toHaveAttribute('href', '/inventory/lots?productId=prod-1')
+  })
+
+  it('renders per-variant "Ver lotes" links in variants table', async () => {
+    mockGetProductById.mockResolvedValue(successResponse())
+
+    await renderPage()
+
+    const lotesLinks = screen.getAllByText('Ver lotes')
+    expect(lotesLinks.length).toBe(2)
+  })
+
+  it('per-variant "Ver lotes" link includes productId and variantId', async () => {
+    mockGetProductById.mockResolvedValue(successResponse())
+
+    await renderPage()
+
+    const lotesLinks = screen.getAllByText('Ver lotes')
+    const firstLink = lotesLinks[0].closest('a')
+    expect(firstLink).toHaveAttribute(
+      'href',
+      expect.stringContaining('productId=prod-1'),
+    )
+    expect(firstLink).toHaveAttribute(
+      'href',
+      expect.stringContaining('variantId=var-1'),
+    )
+  })
+
+  it('second variant lotes link uses its own variantId', async () => {
+    mockGetProductById.mockResolvedValue(successResponse())
+
+    await renderPage()
+
+    const lotesLinks = screen.getAllByText('Ver lotes')
+    const secondLink = lotesLinks[1].closest('a')
+    expect(secondLink).toHaveAttribute(
+      'href',
+      expect.stringContaining('variantId=var-2'),
+    )
+  })
+
+  it('does not render per-variant lotes links when no variants', async () => {
+    mockGetProductById.mockResolvedValue(noVariantsProduct())
+
+    await renderPage()
+
+    expect(screen.queryByText('Ver lotes')).not.toBeInTheDocument()
+  })
+
+  it('still renders product-level CTA when no variants', async () => {
+    mockGetProductById.mockResolvedValue(noVariantsProduct())
+
+    await renderPage()
+
+    expect(screen.getByText('Ver stock en lotes')).toBeInTheDocument()
+  })
+
+  it('does not render lot CTA in 404 error state', async () => {
+    mockGetProductById.mockResolvedValue(notFoundResponse())
+
+    await renderPage('999')
+
+    expect(screen.queryByText('Ver stock en lotes')).not.toBeInTheDocument()
+    expect(screen.queryByText('Ver lotes')).not.toBeInTheDocument()
+  })
+
+  it('renders product-level CTA in 500 error state (keep navigation available)', async () => {
+    mockGetProductById.mockResolvedValue(errorResponse('Internal error'))
+
+    await renderPage()
+
+    expect(screen.getByText('Ver stock en lotes')).toBeInTheDocument()
+  })
+})

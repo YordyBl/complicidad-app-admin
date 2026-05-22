@@ -56,6 +56,7 @@ import {
   getSessionToken,
   requireSession,
   redirectIfAuthenticated,
+  requireActorContext,
   type SessionData,
 } from './session'
 
@@ -141,9 +142,25 @@ describe('clearSession', () => {
     expect(deletedCookies).toContain('test_session')
   })
 
-  it('is safe to call when no cookie exists', async () => {
+  it('does not throw and leaves state consistent when no cookie exists', async () => {
+    // Pre-condition: no session cookie is set
+    expect(cookieMap.has('test_session')).toBe(false)
+
     await clearSession()
-    expect(true).toBe(true)
+
+    // Cookie should still be absent
+    expect(cookieMap.has('test_session')).toBe(false)
+  })
+
+  it('preserves unrelated cookies when clearing session', async () => {
+    cookieMap.set('other_cookie', 'preserved-value')
+
+    await clearSession()
+
+    // Session cookie is removed (mocked delete pushes to deletedCookies)
+    expect(cookieMap.has('test_session')).toBe(false)
+    // Unrelated cookie is untouched
+    expect(cookieMap.get('other_cookie')).toBe('preserved-value')
   })
 })
 
@@ -206,5 +223,49 @@ describe('redirectIfAuthenticated', () => {
   it('does nothing when no session exists', async () => {
     await redirectIfAuthenticated()
     expect(redirectFn).not.toHaveBeenCalled()
+  })
+})
+
+// ── requireActorContext ─────────────────────────────────────────────
+
+describe('requireActorContext', () => {
+  it('returns actorId and actorSource when session user exists', async () => {
+    cookieMap.set('test_session', JSON.stringify(validSession))
+
+    const ctx = await requireActorContext()
+
+    expect('actorId' in ctx).toBe(true)
+    expect('error' in ctx).toBe(false)
+    if ('actorId' in ctx) {
+      expect(ctx.actorId).toBe('user-1')
+      expect(ctx.actorSource).toBe('complicidad-app-admin')
+    }
+  })
+
+  it('returns error state when no session exists', async () => {
+    const result = await requireActorContext()
+
+    expect('error' in result).toBe(true)
+    if ('error' in result) {
+      expect(result.error).toBeTruthy()
+    }
+  })
+
+  it('returns error state when session is invalid JSON', async () => {
+    cookieMap.set('test_session', 'garbage')
+
+    const result = await requireActorContext()
+
+    expect('error' in result).toBe(true)
+  })
+
+  it('returns error state when session user has no id', async () => {
+    cookieMap.set('test_session', JSON.stringify({
+      token: 'tok',
+      user: { email: 'a@b.com', name: 'X', role: 'operator' },
+    }))
+
+    const result = await requireActorContext()
+    expect('error' in result).toBe(true)
   })
 })

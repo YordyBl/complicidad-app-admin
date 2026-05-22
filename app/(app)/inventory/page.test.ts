@@ -710,3 +710,62 @@ describe('InventoryPage — pagination', () => {
     expect(screen.queryByLabelText('Paginación de productos')).not.toBeInTheDocument()
   })
 })
+
+// ═══════════════════════════════════════════════════════════════
+// Ver stock en lotes CTA — entrypoint into /inventory/lots
+// ═══════════════════════════════════════════════════════════════
+
+describe('InventoryPage — Ver stock en lotes CTA', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('renders "Ver stock en lotes" action card', async () => {
+    mockListProducts.mockResolvedValue(successResponse())
+
+    const jsx = await InventoryPage({ searchParams: Promise.resolve({}) })
+    render(jsx)
+
+    expect(screen.getByText('Ver stock en lotes')).toBeInTheDocument()
+  })
+
+  it('action card links to /inventory/lots', async () => {
+    mockListProducts.mockResolvedValue(successResponse())
+
+    const jsx = await InventoryPage({ searchParams: Promise.resolve({}) })
+    render(jsx)
+
+    const cta = screen.getByText('Ver stock en lotes')
+    const link = cta.closest('a')
+    expect(link).toHaveAttribute('href', '/inventory/lots')
+  })
+
+  it('renders description text explaining lot management', async () => {
+    mockListProducts.mockResolvedValue(successResponse())
+
+    const jsx = await InventoryPage({ searchParams: Promise.resolve({}) })
+    render(jsx)
+
+    expect(
+      screen.getByText(/gestionar el stock por lotes/i),
+    ).toBeInTheDocument()
+  })
+
+  it('renders Ver stock en lotes CTA even in error state', async () => {
+    mockListProducts.mockResolvedValue(errorResponse('Server error'))
+
+    const jsx = await InventoryPage({ searchParams: Promise.resolve({}) })
+    render(jsx)
+
+    expect(screen.getByText('Ver stock en lotes')).toBeInTheDocument()
+  })
+
+  it('renders Ver stock en lotes CTA in empty state', async () => {
+    mockListProducts.mockResolvedValue(emptyResponse())
+
+    const jsx = await InventoryPage({ searchParams: Promise.resolve({}) })
+    render(jsx)
+
+    expect(screen.getByText('Ver stock en lotes')).toBeInTheDocument()
+  })
+})
