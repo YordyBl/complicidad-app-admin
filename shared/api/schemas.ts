@@ -134,6 +134,48 @@ export type SaleListEntry = z.infer<typeof saleListEntrySchema>
 /** GET /sales now returns SaleListEntry[] with embedded garment display rows. */
 export const saleListSchema = z.array(saleListEntrySchema)
 
+// ── Payment-aware sales schemas (frontend contract extension) ─────
+
+/** Payment lifecycle: pending → partial → paid (or stays pending). */
+export const SALE_PAYMENT_STATUSES = ['pending', 'partial', 'paid'] as const
+export type SalePaymentStatus = (typeof SALE_PAYMENT_STATUSES)[number]
+
+/** Query params accepted by the paginated sales browse page. */
+export const salesListQuerySchema = z.object({
+  page: z.string().optional(),
+  pageSize: z.string().optional(),
+  search: z.string().optional(),
+  status: z.enum(['ACTIVE', 'CANCELLED', 'RETURNED']).optional(),
+  paymentStatus: z.enum(SALE_PAYMENT_STATUSES).optional(),
+  sortBy: z.enum(['createdAt', 'totalRevenueCents', 'totalCostCents', 'grossProfitCents']).optional(),
+  sortOrder: z.enum(['asc', 'desc']).optional(),
+})
+
+export type SalesListQuery = z.infer<typeof salesListQuerySchema>
+
+/** One row in the paginated sales list — includes payment snapshot. */
+export const salesListRowSchema = saleListEntrySchema.extend({
+  customerName: z.string(),
+  paymentStatus: z.enum(SALE_PAYMENT_STATUSES),
+  amountPaidCents: z.number(),
+  pendingBalanceCents: z.number(),
+  settledAt: z.string().nullable(),
+  canSettleBalance: z.boolean(),
+}).passthrough()
+
+export type SalesListRow = z.infer<typeof salesListRowSchema>
+
+/** Paginated sales list response envelope. */
+export const salesListResponseSchema = z.object({
+  items: z.array(salesListRowSchema),
+  total: z.number().int().min(0),
+  page: z.number().int().min(1),
+  pageSize: z.number().int().min(1),
+  totalPages: z.number().int().min(0),
+})
+
+export type SalesListResponse = z.infer<typeof salesListResponseSchema>
+
 /** @deprecated Use SaleListEntry instead; kept for backward compat aliasing. */
 export type SaleListItem = SaleListEntry
 
@@ -168,6 +210,10 @@ export const saleDetailSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   lines: z.array(saleDetailLineSchema),
+  paymentStatus: z.enum(SALE_PAYMENT_STATUSES).optional(),
+  amountPaidCents: z.number().optional(),
+  pendingBalanceCents: z.number().optional(),
+  settledAt: z.string().nullable().optional(),
 }).passthrough()
 
 export type SaleDetail = z.infer<typeof saleDetailSchema>
@@ -232,6 +278,7 @@ export const saleFormSchema = z.object({
   }),
   channelReference: z.string().optional(),
   items: z.array(saleItemSchema).min(1, 'Debe incluir al menos un producto'),
+  amountPaidNowCents: z.number().int().min(0, 'El pago inicial no puede ser negativo').optional(),
 })
 
 export type SaleFormData = z.infer<typeof saleFormSchema>

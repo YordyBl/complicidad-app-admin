@@ -1,9 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
-const { cancelSaleMock, returnSaleMock, createSaleMock } = vi.hoisted(() => ({
+const { cancelSaleMock, returnSaleMock, createSaleMock, settleSaleBalanceMock, mockRevalidatePath } = vi.hoisted(() => ({
   cancelSaleMock: vi.fn(),
   returnSaleMock: vi.fn(),
   createSaleMock: vi.fn(),
+  settleSaleBalanceMock: vi.fn(),
+  mockRevalidatePath: vi.fn(),
+}))
+
+vi.mock('next/cache', () => ({
+  revalidatePath: mockRevalidatePath,
 }))
 
 vi.mock('@/shared/api/sales', () => ({
@@ -22,9 +28,10 @@ vi.mock('@/shared/api/sales', () => ({
   createSale: createSaleMock,
   cancelSale: cancelSaleMock,
   returnSale: returnSaleMock,
+  settleSaleBalance: settleSaleBalanceMock,
 }))
 
-import { createSaleAction, cancelSaleAction, returnSaleAction } from './sales-actions'
+import { createSaleAction, cancelSaleAction, returnSaleAction, settleSaleBalanceAction } from './sales-actions'
 
 function createFormData(entries: Record<string, string>): FormData {
   const fd = new FormData()
@@ -81,6 +88,95 @@ describe('createSaleAction', () => {
 
     expect(result.success).toBe(false)
     expect(result.error).toContain('inválido')
+  })
+
+  it('includes amountPaidNowCents in the create payload for partial payment', async () => {
+    createSaleMock.mockResolvedValueOnce({
+      ok: true,
+      data: { id: 'sale-3' },
+      status: 201,
+    })
+
+    const fd = createFormData({
+      customerId: 'cust-1',
+      channel: 'web',
+      items: JSON.stringify([{ variantId: 'v1', quantity: 1, priceType: 'regular' }]),
+      amountPaidNowCents: '50000',
+      totalCents: '150000',
+    })
+    const result = await createSaleAction(null, fd)
+
+    expect(result.success).toBe(true)
+    expect(createSaleMock).toHaveBeenCalledWith(
+      expect.objectContaining({ amountPaidNowCents: 50000 }),
+    )
+  })
+
+  it('includes amountPaidNowCents=0 for no upfront payment', async () => {
+    createSaleMock.mockResolvedValueOnce({
+      ok: true,
+      data: { id: 'sale-4' },
+      status: 201,
+    })
+
+    const fd = createFormData({
+      customerId: 'cust-1',
+      channel: 'web',
+      items: JSON.stringify([{ variantId: 'v1', quantity: 1, priceType: 'regular' }]),
+      amountPaidNowCents: '0',
+      totalCents: '150000',
+    })
+    const result = await createSaleAction(null, fd)
+
+    expect(result.success).toBe(true)
+    expect(createSaleMock).toHaveBeenCalledWith(
+      expect.objectContaining({ amountPaidNowCents: 0 }),
+    )
+  })
+
+  it('blocks amountPaidNowCents that exceeds cart total', async () => {
+    const fd = createFormData({
+      customerId: 'cust-1',
+      channel: 'web',
+      items: JSON.stringify([{ variantId: 'v1', quantity: 1, priceType: 'regular' }]),
+      amountPaidNowCents: '200000',
+      totalCents: '150000',
+    })
+    const result = await createSaleAction(null, fd)
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('exceder')
+    expect(createSaleMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects malformed amountPaidNowCents (non-integer)', async () => {
+    const fd = createFormData({
+      customerId: 'cust-1',
+      channel: 'web',
+      items: JSON.stringify([{ variantId: 'v1', quantity: 1, priceType: 'regular' }]),
+      amountPaidNowCents: 'abc',
+      totalCents: '150000',
+    })
+    const result = await createSaleAction(null, fd)
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('inválido')
+    expect(createSaleMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects negative amountPaidNowCents', async () => {
+    const fd = createFormData({
+      customerId: 'cust-1',
+      channel: 'web',
+      items: JSON.stringify([{ variantId: 'v1', quantity: 1, priceType: 'regular' }]),
+      amountPaidNowCents: '-100',
+      totalCents: '150000',
+    })
+    const result = await createSaleAction(null, fd)
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('negativo')
+    expect(createSaleMock).not.toHaveBeenCalled()
   })
 })
 
@@ -193,5 +289,89 @@ describe('returnSaleAction', () => {
 
     expect(result.success).toBe(false)
     expect(result.error).toContain('disponible')
+  })
+})
+
+describe('settleSaleBalanceAction', () => {
+  it('settles a pending balance successfully', async () => {
+    settleSaleBalanceMock.mockResolvedValueOnce({
+      ok: true,
+      data: { saleId: 'sale-1', paymentStatus: 'paid', settledAmountCents: 50000 },
+      status: 200,
+    })
+
+    const result = await settleSaleBalanceAction('sale-1')
+
+    expect(result.success).toBe(true)
+    expect(settleSaleBalanceMock).toHaveBeenCalledWith('sale-1')
+  })
+
+  it('returns error when saleId is empty', async () => {
+    const result = await settleSaleBalanceAction('')
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('ID')
+  })
+
+  it('returns error on 404 not found', async () => {
+    settleSaleBalanceMock.mockResolvedValueOnce({
+      ok: false,
+      error: { error: 'NotFound', message: 'Sale not found', status: 404 },
+    })
+
+    const result = await settleSaleBalanceAction('bad-id')
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('encontrada')
+  })
+
+  it('returns error on 409 conflict (already settled)', async () => {
+    settleSaleBalanceMock.mockResolvedValueOnce({
+      ok: false,
+      error: { error: 'Conflict', message: 'Sale is already fully paid', status: 409 },
+    })
+
+    const result = await settleSaleBalanceAction('settled-sale')
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('saldo')
+  })
+
+  it('returns network error message', async () => {
+    settleSaleBalanceMock.mockResolvedValueOnce({
+      ok: false,
+      error: { error: 'NetworkError', message: 'timeout', status: 503 },
+    })
+
+    const result = await settleSaleBalanceAction('sale-1')
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('disponible')
+  })
+
+  it('returns generic error fallback for unknown status codes', async () => {
+    settleSaleBalanceMock.mockResolvedValueOnce({
+      ok: false,
+      error: { error: 'InternalError', message: 'Unexpected failure', status: 500 },
+    })
+
+    const result = await settleSaleBalanceAction('sale-1')
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Unexpected failure')
+  })
+
+  it('calls revalidatePath for /sales and /cash on successful settlement', async () => {
+    settleSaleBalanceMock.mockResolvedValueOnce({
+      ok: true,
+      data: { saleId: 'sale-1', paymentStatus: 'paid', settledAmountCents: 50000 },
+      status: 200,
+    })
+
+    const result = await settleSaleBalanceAction('sale-1')
+
+    expect(result.success).toBe(true)
+    expect(mockRevalidatePath).toHaveBeenCalledWith('/sales')
+    expect(mockRevalidatePath).toHaveBeenCalledWith('/cash')
   })
 })

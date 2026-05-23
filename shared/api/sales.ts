@@ -1,13 +1,14 @@
 import 'server-only'
 
 /**
- * Sales API client — create, cancel, return, list, detail.
+ * Sales API client — create, cancel, return, list, detail, settle.
  *
  * Endpoints:
  * - POST /api/v1/sales              → Sale
  * - POST /api/v1/sales/:id/cancel   → CancelledSale
  * - POST /api/v1/sales/:id/return   → ReturnedSale
- * - GET  /api/v1/sales              → SaleListItem[]
+ * - POST /api/v1/sales/:id/settle-balance → SettledSale
+ * - GET  /api/v1/sales              → { items, total, page, pageSize, totalPages }
  * - GET  /api/v1/sales/:id          → SaleDetail
  */
 
@@ -20,12 +21,17 @@ import {
   saleDetailSchema,
   saleListEntrySchema,
   saleListItemSchema,
+  salesListQuerySchema,
+  salesListResponseSchema,
   type SaleItem,
   type SaleFormData,
   type SaleListItem,
   type SaleListEntry,
   type SaleListItemDisplay,
   type SaleDetail,
+  type SalesListQuery,
+  type SalesListResponse,
+  type SalesListRow,
 } from './schemas'
 
 // Re-export schemas and types for server-side consumers
@@ -36,12 +42,17 @@ export {
   saleDetailSchema,
   saleListEntrySchema,
   saleListItemSchema,
+  salesListQuerySchema,
+  salesListResponseSchema,
   type SaleItem,
   type SaleFormData,
   type SaleListItem,
   type SaleListEntry,
   type SaleListItemDisplay,
   type SaleDetail,
+  type SalesListQuery,
+  type SalesListResponse,
+  type SalesListRow,
 }
 
 // ── API functions ──────────────────────────────────────────────────
@@ -64,20 +75,19 @@ export async function returnSale(
   return apiPost<Record<string, unknown>>(`/sales/${saleId}/return`, {})
 }
 
-export interface ListSalesFilters {
-  customerId?: string
-  status?: string
-  dateFrom?: string
-  dateTo?: string
-  sortOrder?: 'ASC' | 'DESC'
-}
-
+/**
+ * List sales with pagination, filters, and payment status.
+ *
+ * Accepts a flat query object matching the backend's paginated
+ * sales contract. All params are optional — an empty call returns
+ * the first page with default pageSize.
+ */
 export async function listSales(
-  filters?: ListSalesFilters,
-): Promise<ApiResult<SaleListItem[]>> {
+  query?: SalesListQuery,
+): Promise<ApiResult<SalesListResponse>> {
   const params = new URLSearchParams()
-  if (filters) {
-    for (const [key, value] of Object.entries(filters)) {
+  if (query) {
+    for (const [key, value] of Object.entries(query)) {
       if (value !== undefined && value !== '') {
         params.set(key, value)
       }
@@ -86,11 +96,11 @@ export async function listSales(
   const qs = params.toString()
   const path = qs ? `/sales?${qs}` : '/sales'
 
-  const result = await apiGet<SaleListItem[]>(path)
+  const result = await apiGet<SalesListResponse>(path)
 
   // Validate response shape through Zod on success
   if (result.ok) {
-    const parsed = saleListSchema.safeParse(result.data)
+    const parsed = salesListResponseSchema.safeParse(result.data)
     if (parsed.success) {
       return { ...result, data: parsed.data }
     }
@@ -105,6 +115,18 @@ export async function listSales(
   }
 
   return result
+}
+
+/**
+ * Settle a sale's remaining balance via POST /sales/:id/settle-balance.
+ *
+ * The backend creates a cash movement and flips paymentStatus to 'paid'.
+ * Revalidation of /sales and /cash is handled by the caller (server action).
+ */
+export async function settleSaleBalance(
+  saleId: string,
+): Promise<ApiResult<Record<string, unknown>>> {
+  return apiPost<Record<string, unknown>>(`/sales/${saleId}/settle-balance`, {})
 }
 
 export async function getSale(

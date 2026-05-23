@@ -36,6 +36,7 @@ import { Spinner } from '@/components/ui/spinner'
 
 const MOVEMENT_TYPE_LABELS: Record<string, string> = {
   SALE_INCOME: 'Venta',
+  SALE_SETTLEMENT_INCOME: 'Liquidación de venta',
   PURCHASE_OUTFLOW: 'Compra',
   RETURN_OUTFLOW: 'Devolución',
   MANUAL_ADJUSTMENT: 'Ajuste manual',
@@ -49,6 +50,7 @@ function movementTypeLabel(type: string): string {
 function movementTypeColor(type: string): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (type) {
     case 'SALE_INCOME':
+    case 'SALE_SETTLEMENT_INCOME':
       return 'default'
     case 'PURCHASE_OUTFLOW':
     case 'RETURN_OUTFLOW':
@@ -789,6 +791,7 @@ function renderSelectedBoxDetail(params: DetailRenderParams) {
               >
                 <option value="">Todos</option>
                 <option value="SALE_INCOME">Venta</option>
+                <option value="SALE_SETTLEMENT_INCOME">Liquidación de venta</option>
                 <option value="PURCHASE_OUTFLOW">Compra</option>
                 <option value="RETURN_OUTFLOW">Devolución</option>
                 <option value="MANUAL_ADJUSTMENT">Ajuste manual</option>

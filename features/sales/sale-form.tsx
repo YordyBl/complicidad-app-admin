@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -51,6 +51,9 @@ export function SaleForm() {
   const [isSuccess, setIsSuccess] = useState(false)
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [showPresaleConfirm, setShowPresaleConfirm] = useState(false)
+  const [amountPaidNowSoles, setAmountPaidNowSoles] = useState('')
+  const [fullPaymentActive, setFullPaymentActive] = useState(false)
+  const prevTotalSolesRef = useRef(0)
 
   const {
     register,
@@ -175,6 +178,12 @@ export function SaleForm() {
       }))
       formData.set('items', JSON.stringify(items))
 
+      // Include payment data
+      if (amountPaidNowSoles) {
+        formData.set('amountPaidNowCents', String(amountPaidCents))
+      }
+      formData.set('totalCents', String(totalCents))
+
       const result = await createSaleAction(null, formData)
 
       if (!result.success) {
@@ -198,6 +207,23 @@ export function SaleForm() {
 
   // Convert soles to cents for formatCurrency (which expects integer cents)
   const totalCents = Math.round(totalSoles * 100)
+
+  // Sync full-payment amount when cart total changes while checkbox is active
+  useEffect(() => {
+    if (fullPaymentActive && totalSoles !== prevTotalSolesRef.current) {
+      prevTotalSolesRef.current = totalSoles
+      if (totalSoles > 0) {
+        setAmountPaidNowSoles(totalSoles.toFixed(2))
+      }
+    }
+    if (!fullPaymentActive) {
+      prevTotalSolesRef.current = totalSoles
+    }
+  }, [totalSoles, fullPaymentActive])
+
+  // Derived pending balance in cents
+  const amountPaidCents = amountPaidNowSoles ? Math.round(parseFloat(amountPaidNowSoles) * 100) : 0
+  const pendingBalanceCents = Math.max(0, totalCents - amountPaidCents)
 
   if (isSuccess) {
     return (
@@ -377,6 +403,67 @@ export function SaleForm() {
         </div>
 
         <FormFieldError message={errors.items?.message} />
+
+        {/* Payment section — visible only when cart has items */}
+        {cartItems.length > 0 && (
+          <div className="space-y-3 border-t pt-4">
+            <Label>Pago inicial</Label>
+
+            <div className="flex items-center gap-4">
+              <div className="flex-1">
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
+                    S/
+                  </span>
+                  <Input
+                    id="amountPaidNowSoles"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={amountPaidNowSoles}
+                    onChange={(e) => {
+                      setFullPaymentActive(false)
+                      setAmountPaidNowSoles(e.target.value)
+                    }}
+                    placeholder="0.00"
+                    className="pl-10"
+                    disabled={isSubmitting}
+                  />
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 text-sm cursor-pointer whitespace-nowrap">
+                <input
+                  type="checkbox"
+                  checked={fullPaymentActive}
+                  onChange={(e) => {
+                    const checked = e.target.checked
+                    setFullPaymentActive(checked)
+                    if (checked && totalSoles > 0) {
+                      setAmountPaidNowSoles(totalSoles.toFixed(2))
+                    } else {
+                      setAmountPaidNowSoles('')
+                    }
+                  }}
+                  disabled={isSubmitting || totalSoles === 0}
+                  className="h-4 w-4"
+                />
+                Pagar total
+              </label>
+            </div>
+
+            {/* Pending balance hint */}
+            {amountPaidNowSoles && amountPaidCents >= 0 && (
+              <p className="text-sm text-muted-foreground">
+                Pendiente:{' '}
+                <span className={pendingBalanceCents === 0 ? 'text-green-600 font-medium' : 'font-medium'}>
+                  {formatCurrency(pendingBalanceCents)}
+                </span>
+                {pendingBalanceCents === 0 && ' (liquidado)'}
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Actions */}
         <div className="flex gap-2 pt-2">

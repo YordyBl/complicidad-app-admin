@@ -1,16 +1,24 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { ShoppingCart, XCircle, Undo2 } from 'lucide-react'
+import { ShoppingCart } from 'lucide-react'
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ReversalForm } from '@/features/sales/reversal-form'
 import { SaleList } from '@/features/sales/sale-list'
+import { normalizeSalesSearchParams } from './page-helpers'
 
 export const metadata: Metadata = {
   title: 'Ventas — Complicidad',
 }
 
-export default function SalesPage() {
+interface SalesPageProps {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}
+
+export default async function SalesPage({ searchParams }: SalesPageProps) {
+  const raw = await searchParams
+  const query = normalizeSalesSearchParams(raw)
+
   return (
     <div className="space-y-6">
       <div>
@@ -41,8 +49,8 @@ export default function SalesPage() {
         <ReversalForm action="return" />
       </div>
 
-      {/* Sale list */}
-      <SaleList />
+      {/* Sale list — URL-driven with normalized query */}
+      <SaleList query={query} />
     </div>
   )
 }

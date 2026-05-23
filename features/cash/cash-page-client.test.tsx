@@ -387,6 +387,63 @@ describe('CashPageClient', () => {
       expect(retiroBadges.length).toBeGreaterThanOrEqual(1)
     })
 
+    it('renders friendly label for SALE_SETTLEMENT_INCOME movements', () => {
+      const movementsWithSettlement = cashMovementList({
+        entries: [
+          {
+            id: 'mov-settle',
+            type: 'SALE_SETTLEMENT_INCOME',
+            amountCents: 50000,
+            sourceId: 'sale-1',
+            concept: 'Liquidación de venta #1',
+            createdAt: '2026-05-15T15:00:00Z',
+            profitCents: null,
+          },
+        ],
+        total: 1,
+      })
+
+      render(
+        <CashPageClient
+          currentBox={cashBox()}
+          boxes={[cashBox()]}
+          initialSelectedBoxId="box-1"
+          initialSummary={cashBoxSummary()}
+          initialMovements={movementsWithSettlement}
+          noCurrentBox={false}
+        />,
+      )
+
+      const table = screen.getByRole('table')
+      const withinTable = within(table)
+
+      // Should show friendly label, not the raw enum
+      expect(withinTable.getByText('Liquidación de venta')).toBeInTheDocument()
+      expect(withinTable.queryByText('SALE_SETTLEMENT_INCOME')).not.toBeInTheDocument()
+    })
+
+    it('shows settlement income in type filter dropdown', () => {
+      render(
+        <CashPageClient
+          currentBox={cashBox()}
+          boxes={[cashBox()]}
+          initialSelectedBoxId="box-1"
+          initialSummary={cashBoxSummary()}
+          initialMovements={cashMovementList()}
+          noCurrentBox={false}
+        />,
+      )
+
+      const filterSelect = screen.getByLabelText('Filtrar por tipo')
+      expect(filterSelect).toBeInTheDocument()
+
+      // Settlement income should appear as a filter option
+      const options = Array.from((filterSelect as HTMLSelectElement).options)
+      const settlementOption = options.find((opt) => opt.value === 'SALE_SETTLEMENT_INCOME')
+      expect(settlementOption).toBeTruthy()
+      expect(settlementOption?.textContent).toBe('Liquidación de venta')
+    })
+
     it('filters movements by type from the history header', async () => {
       mockServerActions.getMovementsAction.mockResolvedValueOnce({
         success: true,
