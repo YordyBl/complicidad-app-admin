@@ -6,6 +6,7 @@ import {
   cancelSale,
   returnSale,
   settleSaleBalance,
+  createSaleConstanciaEmission,
   saleFormSchema,
 } from '@/shared/api/sales'
 import type { SaleFormData } from '@/shared/api/sales'
@@ -231,5 +232,47 @@ export async function settleSaleBalanceAction(
 
   revalidatePath('/sales')
   revalidatePath('/cash')
+  return { success: true, data: result.data as Record<string, unknown> }
+}
+
+/**
+ * Server Action: create a constancia emission for a sale.
+ *
+ * Posts the enriched sale data to POST /sales/:id/constancia-emissions
+ * and revalidates the sale detail page so the emission history refreshes.
+ */
+export async function createConstanciaEmissionAction(
+  saleId: string,
+  saleData: Record<string, unknown>,
+): Promise<SaleActionState> {
+  if (!saleId) {
+    return { success: false, error: 'El ID de venta es requerido.' }
+  }
+
+  const result = await createSaleConstanciaEmission(saleId, saleData)
+
+  if (!result.ok) {
+    if (result.error.status === 404) {
+      return { success: false, error: 'Venta no encontrada.' }
+    }
+    if (result.error.status === 400) {
+      return {
+        success: false,
+        error: result.error.message || 'Datos de constancia inválidos.',
+      }
+    }
+    if (result.error.error === 'NetworkError') {
+      return {
+        success: false,
+        error: 'El servidor no está disponible. Intente más tarde.',
+      }
+    }
+    return {
+      success: false,
+      error: result.error.message || 'Error al emitir la constancia.',
+    }
+  }
+
+  revalidatePath(`/sales/${saleId}`)
   return { success: true, data: result.data as Record<string, unknown> }
 }

@@ -1,15 +1,28 @@
-import React from 'react'
+'use client'
+
+import React, { useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, ShoppingCart } from 'lucide-react'
+import { ArrowLeft, FileText, MessageSquare, ShoppingCart, User } from 'lucide-react'
 
 import type { SaleDetail } from '@/shared/api/sales'
+import type { SaleConstanciaEmissionSummary } from '@/shared/api/schemas'
 import { saleChannelLabels } from '@/shared/api/schemas'
 import { formatCurrency, formatDateTime } from '@/shared/api/formatters'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { SaleDocumentsCard } from '@/features/sales/sale-documents-card'
+import { DeliveryMessageDialog } from '@/features/sales/delivery-message-dialog'
 
-export function SaleDetailContent({ sale }: { sale: SaleDetail }) {
+export function SaleDetailContent({
+  sale,
+  emissions,
+}: {
+  sale: SaleDetail
+  emissions?: SaleConstanciaEmissionSummary[]
+}) {
+  const [deliveryDialogOpen, setDeliveryDialogOpen] = useState(false)
+
   return (
     <div className="space-y-6">
       {/* Back link */}
@@ -49,6 +62,37 @@ export function SaleDetailContent({ sale }: { sale: SaleDetail }) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Customer info */}
+      {(sale.customerName || sale.customerPhone || sale.customerAddress || sale.customerDistrict || sale.googleMapsUrl) && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <User className="w-5 h-5" />
+              Cliente
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-4">
+              {sale.customerName && (
+                <DetailItem label="Nombre" value={sale.customerName} />
+              )}
+              {sale.customerPhone && (
+                <DetailItem label="Teléfono" value={sale.customerPhone} />
+              )}
+              {sale.customerAddress && (
+                <DetailItem label="Dirección" value={sale.customerAddress} />
+              )}
+              {sale.customerDistrict && (
+                <DetailItem label="Distrito" value={sale.customerDistrict} />
+              )}
+              {sale.googleMapsUrl && (
+                <DetailItem label="Google Maps" value={sale.googleMapsUrl} />
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Payment snapshot */}
       <Card>
@@ -102,7 +146,11 @@ export function SaleDetailContent({ sale }: { sale: SaleDetail }) {
                     className="border-b last:border-b-0 hover:bg-muted/50"
                   >
                     <td className="py-3 px-4">
-                      <p className="text-sm font-mono">{line.variantId.slice(0, 8)}...</p>
+                      {line.displayLabel ? (
+                        <p className="text-sm">{line.displayLabel}</p>
+                      ) : (
+                        <p className="text-sm font-mono">{line.variantId.slice(0, 8)}...</p>
+                      )}
                     </td>
                     <td className="py-3 px-4 text-sm text-right">{line.quantity}</td>
                     <td className="py-3 px-4 text-sm text-right">
@@ -126,6 +174,86 @@ export function SaleDetailContent({ sale }: { sale: SaleDetail }) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Emission history */}
+      {emissions && emissions.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <FileText className="w-5 h-5" />
+              Constancias ({emissions.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b text-xs text-muted-foreground">
+                    <th className="text-left py-3 px-4 font-medium">Emisión</th>
+                    <th className="text-left py-3 px-4 font-medium">Fecha</th>
+                    <th className="text-left py-3 px-4 font-medium">Versión</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {emissions.map((emission) => (
+                    <tr
+                      key={emission.id}
+                      className="border-b last:border-b-0 hover:bg-muted/50"
+                    >
+                      <td className="py-3 px-4">
+                        <span className="text-sm font-medium">
+                          Constancia #{emission.emissionNumber}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-sm text-muted-foreground">
+                        {formatDateTime(emission.issuedAt)}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-muted-foreground">
+                        {emission.templateVersion}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Document actions */}
+      <SaleDocumentsCard
+        sale={sale}
+        emissions={emissions ?? []}
+      />
+
+      {/* Delivery message trigger */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <MessageSquare className="w-5 h-5" />
+            Mensaje de entrega
+          </CardTitle>
+          <CardDescription>
+            Genera un mensaje copiable con los datos del cliente.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            onClick={() => setDeliveryDialogOpen(true)}
+            className="w-full"
+            variant="outline"
+          >
+            <MessageSquare className="w-4 h-4 mr-2" />
+            Generar mensaje de entrega
+          </Button>
+        </CardContent>
+      </Card>
+
+      <DeliveryMessageDialog
+        sale={sale}
+        open={deliveryDialogOpen}
+        onOpenChange={setDeliveryDialogOpen}
+      />
     </div>
   )
 }

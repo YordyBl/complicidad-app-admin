@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
-import { ShoppingCart, Search, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
+import { ShoppingCart, Search, X, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 
 import { listSales, type SalesListQuery, type SalesListRow } from '@/shared/api/sales'
 import { saleChannelLabels } from '@/shared/api/schemas'
@@ -51,6 +51,13 @@ function SortIcon({ query, field }: { query: SalesListQuery; field: string }) {
   return <ArrowDown className="w-3.5 h-3.5 text-primary" />
 }
 
+/** Returns true when any filter or sort is active — used to show the clear-filters action. */
+function hasActiveFilters(query: SalesListQuery): boolean {
+  return Boolean(
+    query.search || query.status || query.paymentStatus || query.sortBy || query.sortOrder,
+  )
+}
+
 /** Exported for testing — renders the sale table from fetched data. */
 export async function SaleListContent({ query }: { query?: SalesListQuery }) {
   const result = await listSales(query)
@@ -66,22 +73,13 @@ export async function SaleListContent({ query }: { query?: SalesListQuery }) {
 
   const { items: sales, total, page, pageSize, totalPages } = result.data
 
-  if (sales.length === 0) {
-    return (
-      <EmptyState
-        title="Sin ventas"
-        description="No se encontraron ventas con los filtros actuales."
-      />
-    )
-  }
-
   const currentQuery = query ?? {}
 
   return (
     <div className="space-y-4">
       {/* ── Filter controls ───────────────── */}
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-        {/* Search form */}
+        {/* Search form — preserves active filters/sort via hidden inputs */}
         <form
           role="search"
           method="GET"
@@ -91,7 +89,7 @@ export async function SaleListContent({ query }: { query?: SalesListQuery }) {
           <Input
             type="text"
             name="search"
-            placeholder="Buscar ventas..."
+            placeholder="Buscar por cliente..."
             defaultValue={(currentQuery.search as string) ?? ''}
             className="w-full sm:w-64"
           />
@@ -103,6 +101,11 @@ export async function SaleListContent({ query }: { query?: SalesListQuery }) {
             <Search className="w-4 h-4" />
             <span className="hidden sm:inline">Buscar</span>
           </button>
+          {/* Hidden inputs preserve current filter + sort state on submit */}
+          {currentQuery.status && <input type="hidden" name="status" value={currentQuery.status} />}
+          {currentQuery.paymentStatus && <input type="hidden" name="paymentStatus" value={currentQuery.paymentStatus} />}
+          {currentQuery.sortBy && <input type="hidden" name="sortBy" value={currentQuery.sortBy} />}
+          {currentQuery.sortOrder && <input type="hidden" name="sortOrder" value={currentQuery.sortOrder} />}
         </form>
 
         {/* Status filter */}
@@ -175,10 +178,29 @@ export async function SaleListContent({ query }: { query?: SalesListQuery }) {
             Pagadas
           </Link>
         </nav>
+
+        {/* Clear filters — visible only when at least one filter is active */}
+        {hasActiveFilters(currentQuery) && (
+          <Link
+            href="/sales"
+            className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'gap-1 shrink-0')}
+            scroll={false}
+            aria-label="Limpiar filtros"
+          >
+            <X className="w-4 h-4" />
+            <span className="hidden sm:inline">Limpiar filtros</span>
+          </Link>
+        )}
       </div>
 
-      {/* ── Sales table ────────────────────── */}
-      <Card>
+      {sales.length === 0 ? (
+        <EmptyState
+          title="Sin ventas"
+          description="No se encontraron ventas con los filtros actuales."
+        />
+      ) : (
+        /* ── Sales table ────────────────────── */
+        <Card>
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <ShoppingCart className="w-5 h-5" />
@@ -356,6 +378,7 @@ export async function SaleListContent({ query }: { query?: SalesListQuery }) {
           </div>
         )}
       </Card>
+      )}
     </div>
   )
 }

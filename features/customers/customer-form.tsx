@@ -49,6 +49,7 @@ export function CustomerForm({ customer }: CustomerFormProps) {
       phone: customer?.phone ?? '',
       alias: customer?.alias ?? '',
       address: customer?.address ?? '',
+      district: customer?.district ?? '',
       googleMapsUrl: customer?.googleMapsUrl ?? '',
       notes: customer?.notes ?? '',
     },
@@ -205,6 +206,18 @@ export function CustomerForm({ customer }: CustomerFormProps) {
               {...register('address')}
             />
             <FormFieldError message={errors.address?.message} />
+          </div>
+
+          {/* District */}
+          <div className="space-y-2">
+            <Label htmlFor="district">Distrito / Barrio</Label>
+            <Input
+              id="district"
+              placeholder="CABA, Palermo, etc."
+              disabled={isSubmitting}
+              {...register('district')}
+            />
+            <FormFieldError message={errors.district?.message} />
           </div>
 
           {/* Google Maps URL */}

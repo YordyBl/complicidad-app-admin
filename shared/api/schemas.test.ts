@@ -33,6 +33,11 @@ import {
   type InventoryLotRow,
   type InventoryLotAllowedAction,
   type InventoryLotsResponse,
+  // ── Constancia emission schemas (task 3.1) ──
+  saleConstanciaEmissionSummarySchema,
+  saleConstanciaEmissionSchema,
+  type SaleConstanciaEmissionSummary,
+  type SaleConstanciaEmission,
 } from './schemas'
 
 // ── Auth schemas ──────────────────────────────────────────────────
@@ -157,6 +162,7 @@ describe('customerFormSchema', () => {
       phone: '+541112345678',
       alias: 'johnd',
       address: 'Calle 123',
+      district: 'CABA',
       googleMapsUrl: null,
       notes: null,
     })
@@ -170,6 +176,7 @@ describe('customerFormSchema', () => {
       phone: null,
       alias: '',
       address: null,
+      district: null,
       googleMapsUrl: null,
       notes: '',
     })
@@ -183,6 +190,7 @@ describe('customerFormSchema', () => {
       phone: null,
       alias: null,
       address: null,
+      district: null,
       googleMapsUrl: null,
       notes: null,
     })
@@ -196,6 +204,7 @@ describe('customerFormSchema', () => {
       phone: null,
       alias: null,
       address: null,
+      district: null,
       googleMapsUrl: 'not-a-url',
       notes: null,
     })
@@ -209,6 +218,7 @@ describe('customerFormSchema', () => {
       phone: null,
       alias: null,
       address: null,
+      district: null,
       googleMapsUrl: 'https://maps.google.com/?q=123',
       notes: null,
     })
@@ -238,6 +248,7 @@ describe('customerListSchema', () => {
         phone: null,
         alias: null,
         address: null,
+        district: null,
         googleMapsUrl: null,
         notes: null,
         createdAt: '2025-01-01T00:00:00Z',
@@ -695,6 +706,11 @@ describe('saleDetailSchema', () => {
     grossProfitCents: 70000,
     createdAt: '2025-03-15T12:00:00.000Z',
     updatedAt: '2025-03-15T12:30:00.000Z',
+    customerName: 'Juan Pérez',
+    customerPhone: '+549112345678',
+    customerAddress: 'Av. Corrientes 1234',
+    customerDistrict: 'CABA',
+    googleMapsUrl: null,
     lines: [
       {
         id: 'line-uuid-1',
@@ -704,6 +720,10 @@ describe('saleDetailSchema', () => {
         priceType: 'regular',
         totalPriceCents: 150000,
         totalCostCents: 100000,
+        displayLabel: 'Camiseta Blanca',
+        productName: 'Camiseta',
+        sku: 'CAM-BLA-M',
+        attributes: { color: 'Blanco', size: 'M' },
         consumptions: [
           {
             id: 'cons-uuid-1',
@@ -722,6 +742,10 @@ describe('saleDetailSchema', () => {
         priceType: 'presale',
         totalPriceCents: 100000,
         totalCostCents: 80000,
+        displayLabel: 'Pantalón Negro',
+        productName: 'Pantalón',
+        sku: 'PAN-NEG-L',
+        attributes: { color: 'Negro', size: 'L' },
         consumptions: [],
       },
     ],
@@ -1440,6 +1464,95 @@ describe('compensateInventoryLotSchema', () => {
   it('rejects zero quantityDelta (must be non-zero when present)', () => {
     const result = compensateInventoryLotSchema.safeParse({ ...validPayload, quantityDelta: 0 })
     expect(result.success).toBe(false)
+  })
+})
+
+// ── Constancia emission schemas (task 3.1) ────────────────────────
+
+describe('saleConstanciaEmissionSummarySchema', () => {
+  const validSummary: SaleConstanciaEmissionSummary = {
+    id: 'emission-uuid-0001',
+    emissionNumber: 1,
+    issuedAt: '2025-05-15T12:00:00.000Z',
+    templateVersion: 'v1',
+  }
+
+  it('parses a valid emission summary', () => {
+    const result = saleConstanciaEmissionSummarySchema.safeParse(validSummary)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.id).toBe('emission-uuid-0001')
+      expect(result.data.emissionNumber).toBe(1)
+      expect(result.data.issuedAt).toBe('2025-05-15T12:00:00.000Z')
+      expect(result.data.templateVersion).toBe('v1')
+    }
+  })
+
+  it('accepts higher emission numbers (second emission)', () => {
+    const result = saleConstanciaEmissionSummarySchema.safeParse({
+      ...validSummary,
+      id: 'emission-uuid-0002',
+      emissionNumber: 3,
+    })
+    expect(result.success).toBe(true)
+    if (result.success) expect(result.data.emissionNumber).toBe(3)
+  })
+
+  it('rejects missing emissionNumber', () => {
+    const { emissionNumber, ...without } = validSummary
+    const result = saleConstanciaEmissionSummarySchema.safeParse(without)
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects non-string id', () => {
+    const result = saleConstanciaEmissionSummarySchema.safeParse({ ...validSummary, id: 123 })
+    expect(result.success).toBe(false)
+  })
+
+  it('accepts passthrough extra fields', () => {
+    const result = saleConstanciaEmissionSummarySchema.safeParse({
+      ...validSummary,
+      extraField: 'ignored',
+    })
+    expect(result.success).toBe(true)
+  })
+})
+
+describe('saleConstanciaEmissionSchema', () => {
+  const validEmission: SaleConstanciaEmission = {
+    id: 'emission-uuid-0001',
+    saleId: 'sale-uuid-0001',
+    emissionNumber: 1,
+    issuedAt: '2025-05-15T12:00:00.000Z',
+    templateVersion: 'v1',
+    hasSnapshot: true,
+    pdfUrl: '/api/sales/sale-uuid-0001/constancia-emissions/emission-uuid-0001/pdf',
+  }
+
+  it('parses a complete emission response from creation', () => {
+    const result = saleConstanciaEmissionSchema.safeParse(validEmission)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.id).toBe('emission-uuid-0001')
+      expect(result.data.saleId).toBe('sale-uuid-0001')
+      expect(result.data.emissionNumber).toBe(1)
+      expect(result.data.hasSnapshot).toBe(true)
+      expect(result.data.pdfUrl).toContain('/pdf')
+    }
+  })
+
+  it('rejects missing saleId', () => {
+    const { saleId, ...without } = validEmission
+    const result = saleConstanciaEmissionSchema.safeParse(without)
+    expect(result.success).toBe(false)
+  })
+
+  it('accepts passthrough extra fields', () => {
+    const result = saleConstanciaEmissionSchema.safeParse({
+      ...validEmission,
+      extraField: 'ignored',
+    })
+    expect(result.success).toBe(true)
   })
 })
 

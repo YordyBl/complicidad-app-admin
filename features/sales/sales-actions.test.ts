@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
-const { cancelSaleMock, returnSaleMock, createSaleMock, settleSaleBalanceMock, mockRevalidatePath } = vi.hoisted(() => ({
+const { cancelSaleMock, returnSaleMock, createSaleMock, settleSaleBalanceMock, createConstanciaEmissionMock, mockRevalidatePath } = vi.hoisted(() => ({
   cancelSaleMock: vi.fn(),
   returnSaleMock: vi.fn(),
   createSaleMock: vi.fn(),
   settleSaleBalanceMock: vi.fn(),
+  createConstanciaEmissionMock: vi.fn(),
   mockRevalidatePath: vi.fn(),
 }))
 
@@ -29,9 +30,10 @@ vi.mock('@/shared/api/sales', () => ({
   cancelSale: cancelSaleMock,
   returnSale: returnSaleMock,
   settleSaleBalance: settleSaleBalanceMock,
+  createSaleConstanciaEmission: createConstanciaEmissionMock,
 }))
 
-import { createSaleAction, cancelSaleAction, returnSaleAction, settleSaleBalanceAction } from './sales-actions'
+import { createSaleAction, cancelSaleAction, returnSaleAction, settleSaleBalanceAction, createConstanciaEmissionAction } from './sales-actions'
 
 function createFormData(entries: Record<string, string>): FormData {
   const fd = new FormData()
@@ -373,5 +375,82 @@ describe('settleSaleBalanceAction', () => {
     expect(result.success).toBe(true)
     expect(mockRevalidatePath).toHaveBeenCalledWith('/sales')
     expect(mockRevalidatePath).toHaveBeenCalledWith('/cash')
+  })
+})
+
+describe('createConstanciaEmissionAction', () => {
+  it('creates a constancia emission and revalidates the sale path', async () => {
+    const mockEmission = {
+      id: 'emission-uuid-0001',
+      saleId: 'sale-1',
+      emissionNumber: 1,
+      issuedAt: '2025-05-15T12:00:00.000Z',
+      templateVersion: 'v1',
+      hasSnapshot: true,
+      pdfUrl: '/api/sales/sale-1/constancia-emissions/emission-uuid-0001/pdf',
+    }
+    createConstanciaEmissionMock.mockResolvedValueOnce({
+      ok: true,
+      data: mockEmission,
+      status: 201,
+    })
+
+    const result = await createConstanciaEmissionAction('sale-1', {
+      id: 'sale-1',
+      customerName: 'Juan Pérez',
+      lines: [],
+    })
+
+    expect(result.success).toBe(true)
+    expect(createConstanciaEmissionMock).toHaveBeenCalledWith('sale-1', expect.objectContaining({ id: 'sale-1' }))
+    expect(mockRevalidatePath).toHaveBeenCalledWith('/sales/sale-1')
+    if (result.success) {
+      expect(result.data).toBeDefined()
+    }
+  })
+
+  it('returns validation error when saleId is empty', async () => {
+    const result = await createConstanciaEmissionAction('', {})
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('ID')
+  })
+
+  it('returns error on backend failure (network)', async () => {
+    createConstanciaEmissionMock.mockResolvedValueOnce({
+      ok: false,
+      error: { error: 'NetworkError', message: 'timeout', status: 503 },
+    })
+
+    const result = await createConstanciaEmissionAction('sale-1', {})
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error).toContain('disponible')
+    }
+  })
+
+  it('returns error on backend 404', async () => {
+    createConstanciaEmissionMock.mockResolvedValueOnce({
+      ok: false,
+      error: { error: 'NotFoundError', message: 'Sale not found', status: 404 },
+    })
+
+    const result = await createConstanciaEmissionAction('bad-id', {})
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error).toContain('encontrada')
+    }
+  })
+
+  it('returns error on backend validation failure', async () => {
+    createConstanciaEmissionMock.mockResolvedValueOnce({
+      ok: false,
+      error: { error: 'ValidationError', message: 'saleData must be an object', status: 400 },
+    })
+
+    const result = await createConstanciaEmissionAction('sale-1', {})
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error).toContain('saleData')
+    }
   })
 })

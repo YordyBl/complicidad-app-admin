@@ -168,6 +168,7 @@ vi.mock('lucide-react', async () => {
   return {
     ShoppingCart: () => <span data-testid="shopping-cart-icon" />,
     Search: () => <span data-testid="search-icon" />,
+    X: () => <span data-testid="x-icon" />,
     ArrowUpDown: () => <span data-testid="arrow-up-down-icon" />,
     ArrowUp: () => <span data-testid="arrow-up-icon" />,
     ArrowDown: () => <span data-testid="arrow-down-icon" />,
@@ -968,5 +969,329 @@ describe('SaleListContent — filter control reflection', () => {
     const paymentNav = screen.getByLabelText('Filtro de pago')
     const pendientesLink = within(paymentNav).getByText('Pendientes').closest('a')
     expect(pendientesLink).toBeInTheDocument()
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════
+// Search UX fix — customer-oriented placeholder, filter preservation,
+// and clear filters action.
+// ═══════════════════════════════════════════════════════════════════
+
+describe('SaleListContent — search UX: customer-oriented placeholder', () => {
+  it('search input has customer-oriented placeholder', async () => {
+    mockListSales.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        items: [makeSale()],
+        total: 1,
+        page: 1,
+        pageSize: 20,
+        totalPages: 1,
+      },
+    })
+
+    render(await SaleListContent({}))
+
+    const searchInput = screen.getByPlaceholderText('Buscar por cliente...')
+    expect(searchInput).toBeInTheDocument()
+    expect(searchInput).toHaveAttribute('name', 'search')
+  })
+
+  it('search input preserves current value from query.search', async () => {
+    mockListSales.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        items: [makeSale()],
+        total: 1,
+        page: 1,
+        pageSize: 20,
+        totalPages: 1,
+      },
+    })
+
+    render(await SaleListContent({ query: { search: 'maría' } }))
+
+    const searchInput = screen.getByPlaceholderText('Buscar por cliente...')
+    expect(searchInput).toHaveValue('maría')
+  })
+})
+
+describe('SaleListContent — search form preserves active filters via hidden inputs', () => {
+  it('includes hidden inputs for status, paymentStatus, sortBy, sortOrder when set', async () => {
+    mockListSales.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        items: [makeSale()],
+        total: 1,
+        page: 1,
+        pageSize: 20,
+        totalPages: 1,
+      },
+    })
+
+    render(await SaleListContent({
+      query: { status: 'ACTIVE', paymentStatus: 'pending', sortBy: 'createdAt', sortOrder: 'desc' },
+    }))
+
+    const form = screen.getByRole('search')
+
+    const statusInput = form.querySelector('input[name="status"]') as HTMLInputElement | null
+    const paymentInput = form.querySelector('input[name="paymentStatus"]') as HTMLInputElement | null
+    const sortByInput = form.querySelector('input[name="sortBy"]') as HTMLInputElement | null
+    const sortOrderInput = form.querySelector('input[name="sortOrder"]') as HTMLInputElement | null
+
+    expect(statusInput).not.toBeNull()
+    expect(statusInput?.getAttribute('type')).toBe('hidden')
+    expect(statusInput?.getAttribute('value')).toBe('ACTIVE')
+
+    expect(paymentInput).not.toBeNull()
+    expect(paymentInput?.getAttribute('type')).toBe('hidden')
+    expect(paymentInput?.getAttribute('value')).toBe('pending')
+
+    expect(sortByInput).not.toBeNull()
+    expect(sortByInput?.getAttribute('type')).toBe('hidden')
+    expect(sortByInput?.getAttribute('value')).toBe('createdAt')
+
+    expect(sortOrderInput).not.toBeNull()
+    expect(sortOrderInput?.getAttribute('type')).toBe('hidden')
+    expect(sortOrderInput?.getAttribute('value')).toBe('desc')
+  })
+
+  it('does NOT include hidden inputs when corresponding filters are absent', async () => {
+    mockListSales.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        items: [makeSale()],
+        total: 1,
+        page: 1,
+        pageSize: 20,
+        totalPages: 1,
+      },
+    })
+
+    render(await SaleListContent({ query: {} }))
+
+    const form = screen.getByRole('search')
+    expect(form.querySelector('input[name="status"]')).toBeNull()
+    expect(form.querySelector('input[name="paymentStatus"]')).toBeNull()
+    expect(form.querySelector('input[name="sortBy"]')).toBeNull()
+    expect(form.querySelector('input[name="sortOrder"]')).toBeNull()
+  })
+
+  it('does NOT include a hidden page input (search resets to page 1)', async () => {
+    mockListSales.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        items: [makeSale()],
+        total: 1,
+        page: 1,
+        pageSize: 20,
+        totalPages: 1,
+      },
+    })
+
+    render(await SaleListContent({ query: { page: '3' } }))
+
+    const form = screen.getByRole('search')
+    // Page should NOT be preserved in form submission — search resets pagination
+    expect(form.querySelector('input[name="page"]')).toBeNull()
+  })
+})
+
+describe('SaleListContent — clear filters action', () => {
+  it('shows "Limpiar filtros" link when at least one filter is active', async () => {
+    mockListSales.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        items: [makeSale()],
+        total: 1,
+        page: 1,
+        pageSize: 20,
+        totalPages: 1,
+      },
+    })
+
+    render(await SaleListContent({ query: { search: 'camiseta', status: 'ACTIVE' } }))
+
+    const clearLink = screen.getByRole('link', { name: /limpiar filtros/i })
+    expect(clearLink).toBeInTheDocument()
+    expect(clearLink.getAttribute('href')).toBe('/sales')
+  })
+
+  it('shows "Limpiar filtros" when only sort is active', async () => {
+    mockListSales.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        items: [makeSale()],
+        total: 1,
+        page: 1,
+        pageSize: 20,
+        totalPages: 1,
+      },
+    })
+
+    render(await SaleListContent({ query: { sortBy: 'createdAt', sortOrder: 'asc' } }))
+
+    expect(screen.getByRole('link', { name: /limpiar filtros/i })).toBeInTheDocument()
+  })
+
+  it('hides "Limpiar filtros" when no filters are active', async () => {
+    mockListSales.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        items: [makeSale()],
+        total: 1,
+        page: 1,
+        pageSize: 20,
+        totalPages: 1,
+      },
+    })
+
+    render(await SaleListContent({ query: {} }))
+
+    expect(screen.queryByRole('link', { name: /limpiar filtros/i })).not.toBeInTheDocument()
+  })
+
+  it('hides "Limpiar filtros" when query prop is undefined', async () => {
+    mockListSales.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        items: [makeSale()],
+        total: 1,
+        page: 1,
+        pageSize: 20,
+        totalPages: 1,
+      },
+    })
+
+    render(await SaleListContent({}))
+
+    expect(screen.queryByRole('link', { name: /limpiar filtros/i })).not.toBeInTheDocument()
+  })
+
+  it('clear filters link preserves scroll={false} for client-side nav', async () => {
+    mockListSales.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        items: [makeSale()],
+        total: 1,
+        page: 1,
+        pageSize: 20,
+        totalPages: 1,
+      },
+    })
+
+    render(await SaleListContent({ query: { paymentStatus: 'paid' } }))
+
+    const clearLink = screen.getByRole('link', { name: /limpiar filtros/i })
+    // The mock renders 'a' elements, so scroll attribute is preserved
+    expect(clearLink.getAttribute('href')).toBe('/sales')
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════
+// Empty results regression — filter controls must remain visible even
+// when zero sales match so users can adjust/clear filters.
+// ═══════════════════════════════════════════════════════════════════
+
+describe('SaleListContent — empty results keep filter controls visible', () => {
+  it('renders filter controls and empty state when zero results with active filters', async () => {
+    mockListSales.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        items: [],
+        total: 0,
+        page: 1,
+        pageSize: 20,
+        totalPages: 1,
+      },
+    })
+
+    render(await SaleListContent({ query: { search: 'xyz', status: 'CANCELLED' } }))
+
+    // ── Filter controls must be visible ──
+    // Search input
+    expect(screen.getByPlaceholderText('Buscar por cliente...')).toBeInTheDocument()
+    // Status filter nav
+    expect(screen.getByLabelText('Filtro de estado')).toBeInTheDocument()
+    // Payment filter nav
+    expect(screen.getByLabelText('Filtro de pago')).toBeInTheDocument()
+
+    // ── "Limpiar filtros" visible because filters are active ──
+    expect(screen.getByRole('link', { name: /limpiar filtros/i })).toBeInTheDocument()
+
+    // ── Empty state is rendered below controls ──
+    expect(screen.getByTestId('empty-state')).toBeInTheDocument()
+    expect(screen.getByText('Sin ventas')).toBeInTheDocument()
+  })
+
+  it('renders filter controls when zero results with no active filters but no "Limpiar filtros"', async () => {
+    mockListSales.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        items: [],
+        total: 0,
+        page: 1,
+        pageSize: 20,
+        totalPages: 1,
+      },
+    })
+
+    render(await SaleListContent({ query: {} }))
+
+    // ── Filter controls are visible (search input present) ──
+    expect(screen.getByPlaceholderText('Buscar por cliente...')).toBeInTheDocument()
+    expect(screen.getByLabelText('Filtro de estado')).toBeInTheDocument()
+    expect(screen.getByLabelText('Filtro de pago')).toBeInTheDocument()
+
+    // ── No filters active → no "Limpiar filtros" ──
+    expect(screen.queryByRole('link', { name: /limpiar filtros/i })).not.toBeInTheDocument()
+
+    // ── Empty state rendered ──
+    expect(screen.getByTestId('empty-state')).toBeInTheDocument()
+  })
+
+  it('does NOT render table or pagination when zero results', async () => {
+    mockListSales.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        items: [],
+        total: 0,
+        page: 1,
+        pageSize: 20,
+        totalPages: 1,
+      },
+    })
+
+    render(await SaleListContent({ query: { search: 'nonexistent' } }))
+
+    // Table should not be in the DOM at all
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    // Pagination text should not appear
+    expect(screen.queryByText(/Página/i)).not.toBeInTheDocument()
+    // But empty state IS present
+    expect(screen.getByTestId('empty-state')).toBeInTheDocument()
+  })
+
+  it('still renders table correctly when results are non-empty (regression guard)', async () => {
+    mockListSales.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        items: [makeSale({ saleId: 'regression-guard-id' })],
+        total: 1,
+        page: 1,
+        pageSize: 20,
+        totalPages: 1,
+      },
+    })
+
+    render(await SaleListContent({ query: { search: 'exists' } }))
+
+    // Table is present
+    expect(screen.getByRole('table')).toBeInTheDocument()
+    // Empty state is NOT present
+    expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument()
+    // Search input should show the search term
+    expect(screen.getByPlaceholderText('Buscar por cliente...')).toHaveValue('exists')
   })
 })

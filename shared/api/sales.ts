@@ -23,6 +23,8 @@ import {
   saleListItemSchema,
   salesListQuerySchema,
   salesListResponseSchema,
+  saleConstanciaEmissionSummarySchema,
+  saleConstanciaEmissionSchema,
   type SaleItem,
   type SaleFormData,
   type SaleListItem,
@@ -32,6 +34,8 @@ import {
   type SalesListQuery,
   type SalesListResponse,
   type SalesListRow,
+  type SaleConstanciaEmissionSummary,
+  type SaleConstanciaEmission,
 } from './schemas'
 
 // Re-export schemas and types for server-side consumers
@@ -44,6 +48,8 @@ export {
   saleListItemSchema,
   salesListQuerySchema,
   salesListResponseSchema,
+  saleConstanciaEmissionSummarySchema,
+  saleConstanciaEmissionSchema,
   type SaleItem,
   type SaleFormData,
   type SaleListItem,
@@ -53,6 +59,8 @@ export {
   type SalesListQuery,
   type SalesListResponse,
   type SalesListRow,
+  type SaleConstanciaEmissionSummary,
+  type SaleConstanciaEmission,
 }
 
 // ── API functions ──────────────────────────────────────────────────
@@ -133,4 +141,30 @@ export async function getSale(
   id: string,
 ): Promise<ApiResult<SaleDetail>> {
   return apiGet<SaleDetail>(`/sales/${id}`)
+}
+
+// ── Constancia emission API functions ──────────────────────────────
+
+/**
+ * Create a new constancia emission for a sale.
+ *
+ * POST /sales/:id/constancia-emissions
+ * Body: { saleData } — enriched sale detail used to build the snapshot.
+ */
+export async function createSaleConstanciaEmission(
+  saleId: string,
+  saleData: Record<string, unknown>,
+): Promise<ApiResult<SaleConstanciaEmission>> {
+  return apiPost<SaleConstanciaEmission>(`/sales/${saleId}/constancia-emissions`, { saleData })
+}
+
+/**
+ * List constancia emission history for a sale (newest first).
+ *
+ * GET /sales/:id/constancia-emissions
+ */
+export async function listSaleConstanciaEmissions(
+  saleId: string,
+): Promise<ApiResult<SaleConstanciaEmissionSummary[]>> {
+  return apiGet<SaleConstanciaEmissionSummary[]>(`/sales/${saleId}/constancia-emissions`)
 }

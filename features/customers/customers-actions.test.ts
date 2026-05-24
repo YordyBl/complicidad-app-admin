@@ -51,9 +51,9 @@ beforeEach(() => {
 
 describe('createCustomerAction', () => {
   it('creates a customer on valid data', async () => {
-    createCustomerMock.mockResolvedValueOnce(mockSuccess({ id: 'cust-1', name: 'John Doe' }))
+    createCustomerMock.mockResolvedValueOnce(mockSuccess({ id: 'cust-1', name: 'John Doe', district: 'CABA' }))
 
-    const fd = createFormData({ name: 'John Doe' })
+    const fd = createFormData({ name: 'John Doe', district: 'CABA' })
     const result = await createCustomerAction(null, fd)
 
     expect(result.success).toBe(true)

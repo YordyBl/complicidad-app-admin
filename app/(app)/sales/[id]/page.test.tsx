@@ -61,10 +61,17 @@ vi.mock('@/shared/api/schemas', () => ({
   },
 }))
 
-vi.mock('lucide-react', () => ({
-  ArrowLeft: () => require('react').createElement('span', { 'data-testid': 'arrow-left-icon' }),
-  ShoppingCart: () => require('react').createElement('span', { 'data-testid': 'cart-icon' }),
-}))
+vi.mock('lucide-react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('lucide-react')>()
+  return {
+    ...actual,
+    ArrowLeft: () => require('react').createElement('span', { 'data-testid': 'arrow-left-icon' }),
+    FileText: () => require('react').createElement('span', { 'data-testid': 'file-text-icon' }),
+    MessageSquare: () => require('react').createElement('span', { 'data-testid': 'message-square-icon' }),
+    ShoppingCart: () => require('react').createElement('span', { 'data-testid': 'cart-icon' }),
+    User: () => require('react').createElement('span', { 'data-testid': 'user-icon' }),
+  }
+})
 
 import { SaleDetailContent } from '@/features/sales/sale-detail-content'
 import type { SaleDetail } from '@/shared/api/sales'

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 
-import { getSale } from '@/shared/api/sales'
+import { getSale, listSaleConstanciaEmissions } from '@/shared/api/sales'
 import { ErrorState } from '@/components/ui/error-state'
 import { SaleDetailContent } from '@/features/sales/sale-detail-content'
 
@@ -16,21 +16,25 @@ export default async function SaleDetailPage({
 }) {
   const { id } = await params
 
-  const result = await getSale(id)
+  const [saleResult, emissionsResult] = await Promise.all([
+    getSale(id),
+    listSaleConstanciaEmissions(id),
+  ])
 
-  if (!result.ok) {
-    if (result.error.status === 404) {
+  if (!saleResult.ok) {
+    if (saleResult.error.status === 404) {
       notFound()
     }
     return (
       <ErrorState
         title="Error al cargar venta"
-        message={result.error.message}
+        message={saleResult.error.message}
       />
     )
   }
 
-  const sale = result.data
+  const sale = saleResult.data
+  const emissions = emissionsResult.ok ? emissionsResult.data : undefined
 
-  return <SaleDetailContent sale={sale} />
+  return <SaleDetailContent sale={sale} emissions={emissions} />
 }

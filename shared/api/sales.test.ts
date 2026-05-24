@@ -40,7 +40,7 @@ import {
 
 // ── Import function under test ─────────────────────────────────────
 
-import { listSales, settleSaleBalance } from './sales'
+import { listSales, settleSaleBalance, createSaleConstanciaEmission, listSaleConstanciaEmissions } from './sales'
 import type { ApiResult } from './api-fetch'
 
 // ── Helpers ────────────────────────────────────────────────────────
@@ -308,6 +308,11 @@ describe('saleDetailSchema — payment snapshot', () => {
       amountPaidCents: 50000,
       pendingBalanceCents: 100000,
       settledAt: null as string | null,
+      customerName: null,
+      customerPhone: null,
+      customerAddress: null,
+      customerDistrict: null,
+      googleMapsUrl: null,
     }
     const parsed = saleDetailSchema.safeParse(detail)
     expect(parsed.success).toBe(true)
@@ -331,6 +336,11 @@ describe('saleDetailSchema — payment snapshot', () => {
       createdAt: '2025-03-15T12:00:00.000Z',
       updatedAt: '2025-03-15T12:30:00.000Z',
       lines: [],
+      customerName: null,
+      customerPhone: null,
+      customerAddress: null,
+      customerDistrict: null,
+      googleMapsUrl: null,
     }
     const parsed = saleDetailSchema.safeParse(detail)
     expect(parsed.success).toBe(true)
@@ -505,6 +515,136 @@ describe('settleSaleBalance', () => {
     if (!result.ok) {
       expect(result.error.status).toBe(409)
       expect(result.error.error).toBe('ConflictError')
+    }
+  })
+})
+
+// ── Constancia emission API client tests (task 3.1) ─────────────────
+
+function makeValidEmissionSummary(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: overrides.id ?? 'emission-uuid-0001',
+    emissionNumber: overrides.emissionNumber ?? 1,
+    issuedAt: overrides.issuedAt ?? '2025-05-15T12:00:00.000Z',
+    templateVersion: overrides.templateVersion ?? 'v1',
+  }
+}
+
+function makeValidEmission(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: overrides.id ?? 'emission-uuid-0001',
+    saleId: overrides.saleId ?? 'sale-uuid-0001',
+    emissionNumber: overrides.emissionNumber ?? 1,
+    issuedAt: overrides.issuedAt ?? '2025-05-15T12:00:00.000Z',
+    templateVersion: overrides.templateVersion ?? 'v1',
+    hasSnapshot: overrides.hasSnapshot ?? true,
+    pdfUrl: overrides.pdfUrl ?? '/api/sales/sale-uuid-0001/constancia-emissions/emission-uuid-0001/pdf',
+  }
+}
+
+describe('createSaleConstanciaEmission', () => {
+  it('calls POST /sales/:id/constancia-emissions with saleData and returns emission', async () => {
+    mockApiPost.mockResolvedValueOnce(makeApiSuccess(makeValidEmission()))
+
+    const saleData = {
+      id: 'sale-uuid-0001',
+      customerName: 'Juan Pérez',
+      customerAddress: 'Av. Corrientes 1234',
+      customerDistrict: 'CABA',
+      lines: [],
+    }
+    const result = await createSaleConstanciaEmission('sale-uuid-0001', saleData)
+
+    expect(mockApiPost).toHaveBeenCalledWith('/sales/sale-uuid-0001/constancia-emissions', { saleData })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.data.id).toBe('emission-uuid-0001')
+      expect(result.data.saleId).toBe('sale-uuid-0001')
+      expect(result.data.emissionNumber).toBe(1)
+      expect(result.data.hasSnapshot).toBe(true)
+    }
+  })
+
+  it('propagates backend error (404 sale not found)', async () => {
+    mockApiPost.mockResolvedValueOnce({
+      ok: false as const,
+      error: { error: 'NotFoundError', message: 'Sale not found', status: 404 },
+    })
+
+    const result = await createSaleConstanciaEmission('bad-id', {})
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error.status).toBe(404)
+      expect(result.error.error).toBe('NotFoundError')
+    }
+  })
+
+  it('propagates backend error (400 validation)', async () => {
+    mockApiPost.mockResolvedValueOnce({
+      ok: false as const,
+      error: { error: 'ValidationError', message: 'saleData is required', status: 400 },
+    })
+
+    const result = await createSaleConstanciaEmission('sale-uuid-0001', {})
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error.message).toBe('saleData is required')
+    }
+  })
+
+  it('propagates network error', async () => {
+    mockApiPost.mockResolvedValueOnce({
+      ok: false as const,
+      error: { error: 'NetworkError', message: 'timeout', status: 503 },
+    })
+
+    const result = await createSaleConstanciaEmission('sale-uuid-0001', {})
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error.error).toBe('NetworkError')
+    }
+  })
+})
+
+describe('listSaleConstanciaEmissions', () => {
+  it('calls GET /sales/:id/constancia-emissions and returns summaries', async () => {
+    const summaries = [
+      makeValidEmissionSummary({ id: 'em-1', emissionNumber: 2 }),
+      makeValidEmissionSummary({ id: 'em-2', emissionNumber: 1 }),
+    ]
+    mockApiGet.mockResolvedValueOnce(makeApiSuccess(summaries))
+
+    const result = await listSaleConstanciaEmissions('sale-uuid-0001')
+
+    expect(mockApiGet).toHaveBeenCalledWith('/sales/sale-uuid-0001/constancia-emissions')
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.data).toHaveLength(2)
+      expect(result.data[0].emissionNumber).toBe(2)
+      expect(result.data[1].emissionNumber).toBe(1)
+    }
+  })
+
+  it('returns empty array when no emissions exist', async () => {
+    mockApiGet.mockResolvedValueOnce(makeApiSuccess([]))
+
+    const result = await listSaleConstanciaEmissions('sale-uuid-0001')
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.data).toHaveLength(0)
+    }
+  })
+
+  it('propagates backend error', async () => {
+    mockApiGet.mockResolvedValueOnce({
+      ok: false as const,
+      error: { error: 'InternalError', message: 'DB down', status: 500 },
+    })
+
+    const result = await listSaleConstanciaEmissions('sale-uuid-0001')
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error.status).toBe(500)
     }
   })
 })

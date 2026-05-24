@@ -60,6 +60,7 @@ const customerSchema = z.object({
   phone: z.string().nullable(),
   alias: z.string().nullable(),
   address: z.string().nullable(),
+  district: z.string().nullable(),
   googleMapsUrl: z.string().nullable(),
   notes: z.string().nullable(),
   createdAt: z.string(),
@@ -196,6 +197,11 @@ const saleDetailLineSchema = z.object({
   totalPriceCents: z.number(),
   totalCostCents: z.number(),
   consumptions: z.array(saleDetailLineConsumptionSchema),
+  // Enriched garment display fields (from SaleDetailReadRepository)
+  displayLabel: z.string().nullable(),
+  productName: z.string().nullable(),
+  sku: z.string().nullable(),
+  attributes: z.record(z.string(), z.string()),
 }).passthrough()
 
 export const saleDetailSchema = z.object({
@@ -214,6 +220,12 @@ export const saleDetailSchema = z.object({
   amountPaidCents: z.number().optional(),
   pendingBalanceCents: z.number().optional(),
   settledAt: z.string().nullable().optional(),
+  // Enriched customer fields (from SaleDetailReadRepository)
+  customerName: z.string().nullable(),
+  customerPhone: z.string().nullable(),
+  customerAddress: z.string().nullable(),
+  customerDistrict: z.string().nullable(),
+  googleMapsUrl: z.string().url().nullable(),
 }).passthrough()
 
 export type SaleDetail = z.infer<typeof saleDetailSchema>
@@ -241,6 +253,7 @@ export const customerFormSchema = z.object({
   phone: z.string().nullable().or(z.literal('')),
   alias: z.string().nullable().or(z.literal('')),
   address: z.string().nullable().or(z.literal('')),
+  district: z.string().nullable().or(z.literal('')),
   googleMapsUrl: z.string().url('URL inválida').nullable().or(z.literal('')),
   notes: z.string().nullable().or(z.literal('')),
 })
@@ -657,3 +670,28 @@ export const productListResponseSchema = z.object({
 })
 
 export type ProductListResponse = z.infer<typeof productListResponseSchema>
+
+// ── Constancia emission schemas ─────────────────────────────────────
+
+/** Summary row returned by GET /sales/:id/constancia-emissions. */
+export const saleConstanciaEmissionSummarySchema = z.object({
+  id: z.string(),
+  emissionNumber: z.number().int().min(1),
+  issuedAt: z.string(),
+  templateVersion: z.string(),
+}).passthrough()
+
+export type SaleConstanciaEmissionSummary = z.infer<typeof saleConstanciaEmissionSummarySchema>
+
+/** Full emission response returned by POST /sales/:id/constancia-emissions. */
+export const saleConstanciaEmissionSchema = z.object({
+  id: z.string(),
+  saleId: z.string(),
+  emissionNumber: z.number().int().min(1),
+  issuedAt: z.string(),
+  templateVersion: z.string(),
+  hasSnapshot: z.boolean(),
+  pdfUrl: z.string(),
+}).passthrough()
+
+export type SaleConstanciaEmission = z.infer<typeof saleConstanciaEmissionSchema>
