@@ -469,50 +469,154 @@ const amountCentsSchema = z.object({
 
 export type AmountCents = z.infer<typeof amountCentsSchema>
 
+/** Canonical liquidity report: single net-balance KPI. */
+export const liquidityReportSchema = z.object({
+  liquidityCents: z.number().int(),
+  currency: z.string(),
+}).strict()
+
+export type LiquidityReport = z.infer<typeof liquidityReportSchema>
+
+/** Canonical stock investment report. */
+export const stockInvestmentReportSchema = z.object({
+  totalInvestmentCents: z.number().int(),
+  currency: z.string(),
+}).strict()
+
+export type StockInvestmentReport = z.infer<typeof stockInvestmentReportSchema>
+
+/** Canonical sales total report. */
+export const salesTotalReportSchema = z.object({
+  totalSalesCents: z.number().int(),
+  currency: z.string(),
+  activeSaleCount: z.number().int().min(0),
+}).strict()
+
+export type SalesTotalReport = z.infer<typeof salesTotalReportSchema>
+
+/** Canonical FIFO COGS report. */
+export const fifoCogsReportSchema = z.object({
+  totalCogsCents: z.number().int(),
+  currency: z.string(),
+}).strict()
+
+export type FifoCogsReport = z.infer<typeof fifoCogsReportSchema>
+
+/** Canonical gross profit report. */
+export const grossProfitReportSchema = z.object({
+  grossProfitCents: z.number().int(),
+  currency: z.string(),
+}).strict()
+
+export type GrossProfitReport = z.infer<typeof grossProfitReportSchema>
+
+/** Canonical reinvestment report. */
+export const reinvestmentReportSchema = z.object({
+  reinvestmentCents: z.number().int(),
+  currency: z.string(),
+}).strict()
+
+export type ReinvestmentReport = z.infer<typeof reinvestmentReportSchema>
+
+/** Canonical operating capital report. */
+export const operatingCapitalReportSchema = z.object({
+  operatingCapitalCents: z.number().int(),
+  currency: z.string(),
+}).strict()
+
+export type OperatingCapitalReport = z.infer<typeof operatingCapitalReportSchema>
+
+// ── Paginated report list schemas ───────────────────────────────────
+
+const stockByProductItemSchema = z.object({
+  productId: z.string(),
+  productName: z.string(),
+  variantId: z.string(),
+  sku: z.string(),
+  totalRemainingQty: z.number().int(),
+  investmentCents: z.number().int(),
+})
+
+export type StockByProductItem = z.infer<typeof stockByProductItemSchema>
+
+const paginationMetaSchema = z.object({
+  page: z.number().int().min(1),
+  pageSize: z.number().int().min(1),
+  totalItems: z.number().int().min(0),
+  totalPages: z.number().int().min(0),
+  search: z.string(),
+})
+
+/** Paginated stock-by-product response envelope. */
+export const stockByProductResponseSchema = paginationMetaSchema.extend({
+  items: z.array(stockByProductItemSchema),
+})
+
+export type StockByProductResponse = z.infer<typeof stockByProductResponseSchema>
+
+const lotReportItemSchema = z.object({
+  lotId: z.string(),
+  variantId: z.string(),
+  productName: z.string(),
+  sku: z.string(),
+  purchasedQuantity: z.number().int().min(0),
+  remainingQuantity: z.number().int().min(0),
+  unitCostCents: z.number().int(),
+  totalCostCents: z.number().int(),
+  purchaseDate: z.string(),
+  status: z.enum(['OPEN', 'EXHAUSTED']),
+})
+
+export type LotReportItem = z.infer<typeof lotReportItemSchema>
+
+/** Paginated lots response envelope. */
+export const lotsResponseSchema = paginationMetaSchema.extend({
+  items: z.array(lotReportItemSchema),
+})
+
+export type LotsResponse = z.infer<typeof lotsResponseSchema>
+
+// ── DEPRECATED legacy schemas (kept for reference) ──────────────────
+// Prefer LiquidityReport, StockInvestmentReport, etc. above.
+
+/** @deprecated Use LiquidityReport (liquidityReportSchema) instead */
 const liquiditySchema = z.object({
   totalCashInCents: z.number().int(),
   totalCashOutCents: z.number().int(),
   balanceCents: z.number().int(),
 }).passthrough()
 
-export type LiquidityReport = z.infer<typeof liquiditySchema>
-
+/** @deprecated Use StockInvestmentReport (stockInvestmentReportSchema) instead */
 const stockInvestmentSchema = z.object({
   totalInvestmentCents: z.number().int(),
 }).passthrough()
 
-export type StockInvestmentReport = z.infer<typeof stockInvestmentSchema>
-
+/** @deprecated Use SalesTotalReport (salesTotalReportSchema) instead */
 const salesTotalSchema = z.object({
   totalSalesCents: z.number().int(),
 }).passthrough()
 
-export type SalesTotalReport = z.infer<typeof salesTotalSchema>
-
+/** @deprecated Use FifoCogsReport (fifoCogsReportSchema) instead */
 const fifoCogsSchema = z.object({
   totalCogsCents: z.number().int(),
 }).passthrough()
 
-export type FifoCogsReport = z.infer<typeof fifoCogsSchema>
-
+/** @deprecated Use GrossProfitReport (grossProfitReportSchema) instead */
 const grossProfitSchema = z.object({
   grossProfitCents: z.number().int(),
 }).passthrough()
 
-export type GrossProfitReport = z.infer<typeof grossProfitSchema>
-
+/** @deprecated Use ReinvestmentReport (reinvestmentReportSchema) instead */
 const reinvestmentSchema = z.object({
   reinvestmentCents: z.number().int(),
 }).passthrough()
 
-export type ReinvestmentReport = z.infer<typeof reinvestmentSchema>
-
+/** @deprecated Use OperatingCapitalReport (operatingCapitalReportSchema) instead */
 const operatingCapitalSchema = z.object({
   operatingCapitalCents: z.number().int(),
 }).passthrough()
 
-export type OperatingCapitalReport = z.infer<typeof operatingCapitalSchema>
-
+/** @deprecated Use StockByProductResponse (stockByProductResponseSchema) instead */
 const stockByProductSchema = z.array(z.object({
   productName: z.string(),
   sku: z.string(),
@@ -523,6 +627,7 @@ const stockByProductSchema = z.array(z.object({
 
 export type StockByProductReport = z.infer<typeof stockByProductSchema>
 
+/** @deprecated Use LotsResponse (lotsResponseSchema) instead */
 const lotsSchema = z.array(z.object({
   lotId: z.string(),
   variantId: z.string(),

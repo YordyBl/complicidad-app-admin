@@ -10,11 +10,24 @@ import 'server-only'
  *
  * All report values are integer cents in ARS currency.
  * All GETs use cache: 'no-store' — financial data is sensitive/mutable.
+ *
+ * Every response is validated through Zod schemas before returning.
+ * Contract drift is detected and returned as a safe error instead of
+ * passing `undefined` or `NaN` into the UI.
  */
 
 import { apiGet } from './api-fetch'
 import type { ApiResult } from './api-fetch'
 import {
+  liquidityReportSchema,
+  stockInvestmentReportSchema,
+  salesTotalReportSchema,
+  fifoCogsReportSchema,
+  grossProfitReportSchema,
+  reinvestmentReportSchema,
+  operatingCapitalReportSchema,
+  stockByProductResponseSchema,
+  lotsResponseSchema,
   type LiquidityReport,
   type StockInvestmentReport,
   type SalesTotalReport,
@@ -22,8 +35,8 @@ import {
   type GrossProfitReport,
   type ReinvestmentReport,
   type OperatingCapitalReport,
-  type StockByProductReport,
-  type LotsReport,
+  type StockByProductResponse,
+  type LotsResponse,
 } from './schemas'
 
 // Re-export types for server-side consumers
@@ -35,75 +48,110 @@ export type {
   GrossProfitReport,
   ReinvestmentReport,
   OperatingCapitalReport,
-  StockByProductReport,
-  LotsReport,
+  StockByProductResponse,
+  LotsResponse,
+}
+
+// ── Internal helpers ────────────────────────────────────────────────
+
+/**
+ * Parse a raw JSON response with a Zod schema.
+ * On success returns `ok: true` with the parsed data.
+ * On failure returns `ok: false` with a ContractError.
+ */
+function parseWith<T>(
+  result: ApiResult<unknown>,
+  schema: { safeParse: (data: unknown) => { success: boolean; data?: T; error?: unknown } },
+  endpoint: string,
+): ApiResult<T> {
+  if (!result.ok) return result
+
+  const parsed = schema.safeParse(result.data)
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: {
+        error: 'ContractError',
+        message: `La respuesta de ${endpoint} no coincide con el contrato esperado`,
+        status: 502,
+      },
+    }
+  }
+
+  return { ok: true, data: parsed.data as T, status: result.status }
 }
 
 // ── API functions ──────────────────────────────────────────────────
 
 export async function getLiquidity(): Promise<ApiResult<LiquidityReport>> {
-  return apiGet<LiquidityReport>('/reports/liquidity')
+  const result = await apiGet<unknown>('/reports/liquidity')
+  return parseWith(result, liquidityReportSchema, '/reports/liquidity')
 }
 
 export async function getStockInvestment(): Promise<ApiResult<StockInvestmentReport>> {
-  return apiGet<StockInvestmentReport>('/reports/stock-investment')
+  const result = await apiGet<unknown>('/reports/stock-investment')
+  return parseWith(result, stockInvestmentReportSchema, '/reports/stock-investment')
 }
 
 export async function getSalesTotal(): Promise<ApiResult<SalesTotalReport>> {
-  return apiGet<SalesTotalReport>('/reports/sales-total')
+  const result = await apiGet<unknown>('/reports/sales-total')
+  return parseWith(result, salesTotalReportSchema, '/reports/sales-total')
 }
 
 export async function getFifoCogs(): Promise<ApiResult<FifoCogsReport>> {
-  return apiGet<FifoCogsReport>('/reports/fifo-cogs')
+  const result = await apiGet<unknown>('/reports/fifo-cogs')
+  return parseWith(result, fifoCogsReportSchema, '/reports/fifo-cogs')
 }
 
 export async function getGrossProfit(): Promise<ApiResult<GrossProfitReport>> {
-  return apiGet<GrossProfitReport>('/reports/gross-profit')
+  const result = await apiGet<unknown>('/reports/gross-profit')
+  return parseWith(result, grossProfitReportSchema, '/reports/gross-profit')
 }
 
 export async function getReinvestment(): Promise<ApiResult<ReinvestmentReport>> {
-  return apiGet<ReinvestmentReport>('/reports/reinvestment')
+  const result = await apiGet<unknown>('/reports/reinvestment')
+  return parseWith(result, reinvestmentReportSchema, '/reports/reinvestment')
 }
 
 export async function getOperatingCapital(): Promise<ApiResult<OperatingCapitalReport>> {
-  return apiGet<OperatingCapitalReport>('/reports/operating-capital')
+  const result = await apiGet<unknown>('/reports/operating-capital')
+  return parseWith(result, operatingCapitalReportSchema, '/reports/operating-capital')
 }
 
-export async function getStockByProduct(): Promise<ApiResult<StockByProductReport>> {
-  const result = await apiGet<unknown>('/reports/stock-by-product')
-  if (!result.ok) return result
+/**
+ * Fetch stock-by-product with optional query params.
+ * Defaults: page=1, pageSize=5, search=''
+ */
+export async function getStockByProduct(
+  opts?: { page?: number; pageSize?: number; search?: string },
+): Promise<ApiResult<StockByProductResponse>> {
+  const params = new URLSearchParams()
+  if (opts?.page) params.set('page', String(opts.page))
+  if (opts?.pageSize) params.set('pageSize', String(opts.pageSize))
+  if (opts?.search) params.set('search', opts.search)
 
-  // Normalize: backend returns { items: StockByProductItem[], totalInvestmentCents: number, currency: string }
-  // but frontend expects a flat array. Defensively accept either shape.
-  const raw = result.data
-  let normalized: unknown[]
-  if (Array.isArray(raw)) {
-    normalized = raw
-  } else if (raw && typeof raw === 'object' && 'items' in raw && Array.isArray((raw as Record<string, unknown>).items)) {
-    normalized = (raw as Record<string, unknown>).items as unknown[]
-  } else {
-    normalized = []
-  }
-  return { ok: true, data: normalized as StockByProductReport, status: result.status }
+  const qs = params.toString()
+  const path = qs ? `/reports/stock-by-product?${qs}` : '/reports/stock-by-product'
+
+  const result = await apiGet<unknown>(path)
+  return parseWith(result, stockByProductResponseSchema, '/reports/stock-by-product')
 }
 
-export async function getLots(): Promise<ApiResult<LotsReport>> {
-  const result = await apiGet<unknown>('/reports/lots')
-  if (!result.ok) return result
+/**
+ * Fetch lots with optional query params.
+ * Defaults: page=1, pageSize=5, search=''
+ */
+export async function getLots(
+  opts?: { page?: number; pageSize?: number; search?: string },
+): Promise<ApiResult<LotsResponse>> {
+  const params = new URLSearchParams()
+  if (opts?.page) params.set('page', String(opts.page))
+  if (opts?.pageSize) params.set('pageSize', String(opts.pageSize))
+  if (opts?.search) params.set('search', opts.search)
 
-  // Normalize: backend returns { open: LotReportItem[], exhausted: LotReportItem[], ... }
-  // but frontend expects a flat array. Defensively accept either shape.
-  const raw = result.data
-  let normalized: unknown[]
-  if (Array.isArray(raw)) {
-    normalized = raw
-  } else if (raw && typeof raw === 'object') {
-    const obj = raw as Record<string, unknown>
-    const open = Array.isArray(obj.open) ? obj.open : []
-    const exhausted = Array.isArray(obj.exhausted) ? obj.exhausted : []
-    normalized = [...open, ...exhausted]
-  } else {
-    normalized = []
-  }
-  return { ok: true, data: normalized as LotsReport, status: result.status }
+  const qs = params.toString()
+  const path = qs ? `/reports/lots?${qs}` : '/reports/lots'
+
+  const result = await apiGet<unknown>(path)
+  return parseWith(result, lotsResponseSchema, '/reports/lots')
 }

@@ -1,11 +1,19 @@
 import type { Metadata } from 'next'
+import { normalizeReportsSearchParams } from './page-helpers'
 import { ReportCards } from '@/features/reports/report-cards'
 
 export const metadata: Metadata = {
   title: 'Reportes — Complicidad',
 }
 
-export default function ReportsPage() {
+interface ReportsPageProps {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}
+
+export default async function ReportsPage({ searchParams }: ReportsPageProps) {
+  const raw = await searchParams
+  const queries = normalizeReportsSearchParams(raw)
+
   return (
     <div className="space-y-6">
       <div>
@@ -16,7 +24,7 @@ export default function ReportsPage() {
         </p>
       </div>
 
-      <ReportCards />
+      <ReportCards stockQuery={queries.stock} lotsQuery={queries.lots} />
     </div>
   )
 }

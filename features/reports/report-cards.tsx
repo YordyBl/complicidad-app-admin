@@ -1,5 +1,6 @@
 import { Suspense } from 'react'
-import { DollarSign, TrendingUp, Package, BarChart3, AlertTriangle } from 'lucide-react'
+import Link from 'next/link'
+import { DollarSign, TrendingUp, Package, BarChart3, Search } from 'lucide-react'
 
 import {
   getLiquidity,
@@ -18,15 +19,34 @@ import {
   type GrossProfitReport,
   type ReinvestmentReport,
   type OperatingCapitalReport,
-  type StockByProductReport,
-  type LotsReport,
+  type StockByProductResponse,
+  type LotsResponse,
 } from '@/shared/api/reports'
 import { formatCurrency, formatDate } from '@/shared/api/formatters'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { LoadingState } from '@/components/ui/loading-state'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ErrorState } from '@/components/ui/error-state'
 import { Skeleton } from '@/components/ui/skeleton'
+import type { ReportCardQuery, ReportsQueryResult } from '@/app/(app)/reports/page-helpers'
+import { buildCardUrl } from '@/app/(app)/reports/page-helpers'
+
+// ── Helpers ────────────────────────────────────────────────────────
+
+export function parsePage(raw?: string): number {
+  const n = parseInt(raw ?? '', 10)
+  return Number.isFinite(n) && n >= 1 ? n : 1
+}
+
+export function parsePageSize(raw?: string): number {
+  const n = parseInt(raw ?? '', 10)
+  return Number.isFinite(n) && n >= 1 ? n : 5
+}
+
+export function parseSearch(raw?: string): string {
+  return (raw ?? '').trim()
+}
 
 // ── Report card wrapper ─────────────────────────────────────────────
 
@@ -71,6 +91,22 @@ function ReportCardSkeleton() {
   )
 }
 
+function ListCardSkeleton() {
+  return (
+    <Card className="h-full">
+      <CardHeader>
+        <Skeleton className="h-6 w-40 mb-2" />
+        <Skeleton className="h-4 w-56" />
+      </CardHeader>
+      <CardContent>
+        <Skeleton className="h-10 w-full mb-3" />
+        <Skeleton className="h-6 w-32 mb-2" />
+        <Skeleton className="h-6 w-32" />
+      </CardContent>
+    </Card>
+  )
+}
+
 // ── Amount display ──────────────────────────────────────────────────
 
 function AmountDisplay({
@@ -99,41 +135,133 @@ function AmountDisplay({
   )
 }
 
-// ── Async report sections ───────────────────────────────────────────
+// ── Search form for list cards ─────────────────────────────────────
+
+function ListSearchForm({
+  currentSearch,
+  namespace,
+  allQueries,
+}: {
+  currentSearch: string
+  namespace: 'stock' | 'lots'
+  allQueries: ReportsQueryResult
+}) {
+  const cardQuery = allQueries[namespace]
+  const pageUrl = buildCardUrl(namespace, allQueries, { page: '1', search: undefined })
+
+  return (
+    <form action={pageUrl} method="GET" className="flex gap-2 mb-3">
+      <div className="relative flex-1">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          name={`${namespace}_search`}
+          defaultValue={currentSearch}
+          placeholder="Buscar..."
+          className="pl-9"
+        />
+      </div>
+      {/* Preserve pageSize across search submits */}
+      {cardQuery.pageSize ? (
+        <input type="hidden" name={`${namespace}_pageSize`} value={cardQuery.pageSize} />
+      ) : null}
+    </form>
+  )
+}
+
+// ── Pagination for list cards ──────────────────────────────────────
+
+function ListPagination({
+  page,
+  totalPages,
+  namespace,
+  allQueries,
+}: {
+  page: number
+  totalPages: number
+  namespace: 'stock' | 'lots'
+  allQueries: ReportsQueryResult
+}) {
+  if (totalPages <= 1) return null
+
+  const pages: number[] = []
+  for (let i = 1; i <= totalPages; i++) {
+    pages.push(i)
+  }
+
+  return (
+    <nav className="flex items-center justify-center gap-1 mt-4" aria-label="Paginación">
+      {page > 1 ? (
+        <Link
+          href={buildCardUrl(namespace, allQueries, { page: String(page - 1) })}
+          className="px-3 py-1.5 text-sm rounded-md border hover:bg-accent"
+        >
+          Anterior
+        </Link>
+      ) : (
+        <span className="px-3 py-1.5 text-sm rounded-md border text-muted-foreground opacity-50">
+          Anterior
+        </span>
+      )}
+
+      {pages.map((p) => (
+        <Link
+          key={p}
+          href={buildCardUrl(namespace, allQueries, { page: String(p) })}
+          className={`px-3 py-1.5 text-sm rounded-md border ${
+            p === page
+              ? 'bg-primary text-primary-foreground border-primary'
+              : 'hover:bg-accent'
+          }`}
+        >
+          {p}
+        </Link>
+      ))}
+
+      {page < totalPages ? (
+        <Link
+          href={buildCardUrl(namespace, allQueries, { page: String(page + 1) })}
+          className="px-3 py-1.5 text-sm rounded-md border hover:bg-accent"
+        >
+          Siguiente
+        </Link>
+      ) : (
+        <span className="px-3 py-1.5 text-sm rounded-md border text-muted-foreground opacity-50">
+          Siguiente
+        </span>
+      )}
+    </nav>
+  )
+}
+
+// ── Async KPI card components ──────────────────────────────────────
 
 async function LiquidityCard() {
   const result = await getLiquidity()
 
   if (!result.ok) {
     return (
-      <ReportCard title="Liquidez" description="Entradas y salidas de caja" icon={DollarSign}>
+      <ReportCard title="Liquidez" description="Saldo neto de caja" icon={DollarSign}>
         <ErrorState title="Error" message={result.error.message} />
       </ReportCard>
     )
   }
 
   const data = result.data
-  if (data.totalCashInCents === 0 && data.totalCashOutCents === 0) {
+  if (data.liquidityCents === 0) {
     return (
-      <ReportCard title="Liquidez" description="Entradas y salidas de caja" icon={DollarSign}>
+      <ReportCard title="Liquidez" description="Saldo neto de caja" icon={DollarSign}>
         <EmptyState title="Sin datos" description="No hay movimientos de caja registrados." />
       </ReportCard>
     )
   }
 
   return (
-    <ReportCard title="Liquidez" description="Entradas y salidas de caja" icon={DollarSign}>
-      <div className="space-y-3">
-        <AmountDisplay label="Total entradas" cents={data.totalCashInCents} variant="positive" />
-        <AmountDisplay label="Total salidas" cents={data.totalCashOutCents} variant="negative" />
-        <div className="pt-3 border-t">
-          <AmountDisplay
-            label="Balance"
-            cents={data.balanceCents}
-            variant={data.balanceCents >= 0 ? 'positive' : 'negative'}
-          />
-        </div>
-      </div>
+    <ReportCard title="Liquidez" description="Saldo neto de caja" icon={DollarSign}>
+      <AmountDisplay
+        label="Saldo neto"
+        cents={data.liquidityCents}
+        variant={data.liquidityCents >= 0 ? 'positive' : 'negative'}
+      />
     </ReportCard>
   )
 }
@@ -273,8 +401,20 @@ async function OperatingCapitalCard() {
   )
 }
 
-async function StockByProductCard() {
-  const result = await getStockByProduct()
+// ── List card components ───────────────────────────────────────────
+
+interface ListCardProps {
+  query: ReportCardQuery
+  allQueries: ReportsQueryResult
+  namespace: 'stock' | 'lots'
+}
+
+async function StockByProductCard({ query, allQueries, namespace }: ListCardProps) {
+  const page = parsePage(query.page)
+  const pageSize = parsePageSize(query.pageSize)
+  const search = parseSearch(query.search)
+
+  const result = await getStockByProduct({ page, pageSize, search })
 
   if (!result.ok) {
     return (
@@ -285,43 +425,53 @@ async function StockByProductCard() {
   }
 
   const data = result.data
-  // Defense-in-depth: ensure data is an array before .length/.map
-  const items = Array.isArray(data) ? data : []
-  if (items.length === 0) {
-    return (
-      <ReportCard title="Stock por producto" description="Desglose de stock por producto" icon={Package}>
-        <EmptyState title="Sin stock" description="No hay productos con stock registrado." />
-      </ReportCard>
-    )
-  }
+  const items = data.items
 
   return (
     <ReportCard title="Stock por producto" description="Desglose de stock por producto" icon={Package}>
-      <div className="space-y-2 max-h-64 overflow-y-auto">
-        {items.map((item, idx) => (
-          <div
-            key={idx}
-            className="flex items-center justify-between py-2 border-b border-muted last:border-0"
-          >
-            <div className="min-w-0">
-              <p className="text-sm font-medium truncate">{item.productName}</p>
-              <p className="text-xs text-muted-foreground">{item.sku}</p>
-            </div>
-            <div className="text-right shrink-0">
-              <p className="text-sm font-medium">{item.totalRemainingQty ?? item.stockQuantity} un.</p>
-              <p className="text-xs text-muted-foreground">
-                {formatCurrency(item.investmentCents)}
-              </p>
-            </div>
+      <ListSearchForm currentSearch={search} namespace={namespace} allQueries={allQueries} />
+
+      {items.length === 0 ? (
+        <EmptyState title="Sin stock" description="No hay productos con stock registrado." />
+      ) : (
+        <>
+          <div className="space-y-2 max-h-80 overflow-y-auto">
+            {items.map((item) => (
+              <div
+                key={`${item.productId}-${item.variantId}`}
+                className="flex items-center justify-between py-2 border-b border-muted last:border-0"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{item.productName}</p>
+                  <p className="text-xs text-muted-foreground">{item.sku}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-sm font-medium">{item.totalRemainingQty} un.</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatCurrency(item.investmentCents)}
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+          <ListPagination
+            page={data.page}
+            totalPages={data.totalPages}
+            namespace={namespace}
+            allQueries={allQueries}
+          />
+        </>
+      )}
     </ReportCard>
   )
 }
 
-async function LotsCard() {
-  const result = await getLots()
+async function LotsCard({ query, allQueries, namespace }: ListCardProps) {
+  const page = parsePage(query.page)
+  const pageSize = parsePageSize(query.pageSize)
+  const search = parseSearch(query.search)
+
+  const result = await getLots({ page, pageSize, search })
 
   if (!result.ok) {
     return (
@@ -332,77 +482,104 @@ async function LotsCard() {
   }
 
   const data = result.data
-  // Defense-in-depth: ensure data is an array before .length/.map
-  const lotsItems = Array.isArray(data) ? data : []
-  if (lotsItems.length === 0) {
-    return (
-      <ReportCard title="Lotes" description="Registro de lotes de compra" icon={Package}>
-        <EmptyState title="Sin lotes" description="No hay lotes de compra registrados." />
-      </ReportCard>
-    )
-  }
+  const lotsItems = data.items
 
   return (
     <ReportCard title="Lotes" description="Registro de lotes de compra" icon={Package}>
-      <div className="space-y-2 max-h-64 overflow-y-auto">
-        {lotsItems.map((lot) => (
-          <div
-            key={lot.lotId}
-            className="flex items-center justify-between py-2 border-b border-muted last:border-0"
-          >
-            <div className="min-w-0">
-              <p className="text-sm font-medium truncate">{lot.productName}</p>
-              <p className="text-xs text-muted-foreground">
-                {lot.sku} — Comprado {formatDate(lot.purchaseDate)}
-              </p>
-            </div>
-            <div className="text-right shrink-0">
-              <p className="text-sm">
-                {lot.remainingQuantity}/{lot.purchasedQuantity ?? lot.quantity} un.
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {formatCurrency(Math.round(lot.unitCost * 100))} c/u
-              </p>
-            </div>
+      <ListSearchForm currentSearch={search} namespace={namespace} allQueries={allQueries} />
+
+      {lotsItems.length === 0 ? (
+        <EmptyState title="Sin lotes" description="No hay lotes de compra registrados." />
+      ) : (
+        <>
+          <div className="space-y-2 max-h-80 overflow-y-auto">
+            {lotsItems.map((lot) => (
+              <div
+                key={lot.lotId}
+                className="flex items-center justify-between py-2 border-b border-muted last:border-0"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{lot.productName}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {lot.sku} — Comprado {formatDate(lot.purchaseDate)}
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-sm">
+                    {lot.remainingQuantity}/{lot.purchasedQuantity} un.
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatCurrency(lot.unitCostCents)} c/u
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+          <ListPagination
+            page={data.page}
+            totalPages={data.totalPages}
+            namespace={namespace}
+            allQueries={allQueries}
+          />
+        </>
+      )}
     </ReportCard>
   )
 }
 
 // ── Exported component ──────────────────────────────────────────────
 
-export function ReportCards() {
+export function ReportCards({
+  stockQuery = {},
+  lotsQuery = {},
+}: {
+  stockQuery?: ReportCardQuery
+  lotsQuery?: ReportCardQuery
+}) {
+  const allQueries: ReportsQueryResult = { stock: stockQuery, lots: lotsQuery }
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-      <Suspense fallback={<ReportCardSkeleton />}>
-        <LiquidityCard />
-      </Suspense>
-      <Suspense fallback={<ReportCardSkeleton />}>
-        <StockInvestmentCard />
-      </Suspense>
-      <Suspense fallback={<ReportCardSkeleton />}>
-        <SalesTotalCard />
-      </Suspense>
-      <Suspense fallback={<ReportCardSkeleton />}>
-        <CogsCard />
-      </Suspense>
-      <Suspense fallback={<ReportCardSkeleton />}>
-        <GrossProfitCard />
-      </Suspense>
-      <Suspense fallback={<ReportCardSkeleton />}>
-        <ReinvestmentCard />
-      </Suspense>
-      <Suspense fallback={<ReportCardSkeleton />}>
-        <OperatingCapitalCard />
-      </Suspense>
-      <Suspense fallback={<ReportCardSkeleton />}>
-        <StockByProductCard />
-      </Suspense>
-      <Suspense fallback={<ReportCardSkeleton />}>
-        <LotsCard />
-      </Suspense>
-    </div>
+    <>
+      {/* ── KPI cards — first ──────────────────────────────── */}
+      <section>
+        <h2 className="text-lg font-semibold mb-3">Indicadores clave</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <Suspense fallback={<ReportCardSkeleton />}>
+            <LiquidityCard />
+          </Suspense>
+          <Suspense fallback={<ReportCardSkeleton />}>
+            <StockInvestmentCard />
+          </Suspense>
+          <Suspense fallback={<ReportCardSkeleton />}>
+            <SalesTotalCard />
+          </Suspense>
+          <Suspense fallback={<ReportCardSkeleton />}>
+            <CogsCard />
+          </Suspense>
+          <Suspense fallback={<ReportCardSkeleton />}>
+            <GrossProfitCard />
+          </Suspense>
+          <Suspense fallback={<ReportCardSkeleton />}>
+            <ReinvestmentCard />
+          </Suspense>
+          <Suspense fallback={<ReportCardSkeleton />}>
+            <OperatingCapitalCard />
+          </Suspense>
+        </div>
+      </section>
+
+      {/* ── List cards — second, wider ─────────────────────── */}
+      <section>
+        <h2 className="text-lg font-semibold mb-3">Listados</h2>
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <Suspense fallback={<ListCardSkeleton />}>
+            <StockByProductCard query={stockQuery} allQueries={allQueries} namespace="stock" />
+          </Suspense>
+          <Suspense fallback={<ListCardSkeleton />}>
+            <LotsCard query={lotsQuery} allQueries={allQueries} namespace="lots" />
+          </Suspense>
+        </div>
+      </section>
+    </>
   )
 }
