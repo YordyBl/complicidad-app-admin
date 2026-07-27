@@ -26,6 +26,7 @@ import type { SaleChannel } from '@/shared/api/schemas'
 type FormValues = {
   customerId: string
   channel: SaleChannel
+  channelReference?: string
   items: SaleItem[]
 }
 
@@ -171,6 +172,11 @@ export function SaleForm() {
       formData.set('customerId', customerId)
       formData.set('channel', watch('channel'))
 
+      const channelRef = watch('channelReference')
+      if (channelRef) {
+        formData.set('channelReference', channelRef)
+      }
+
       const items: SaleItem[] = cartItems.map((i) => ({
         variantId: i.variantId,
         quantity: i.quantity,
@@ -311,6 +317,22 @@ export function SaleForm() {
             </SelectContent>
           </Select>
           <FormFieldError message={errors.channel?.message} />
+        </div>
+
+        {/* Channel reference — optional order/transaction ID from external platform */}
+        <div className="space-y-2">
+          <Label htmlFor="channelReference">
+            Referencia del canal
+          </Label>
+          <Input
+            id="channelReference"
+            placeholder="Ej: ID de pedido de TikTok, WhatsApp, etc."
+            {...register('channelReference')}
+            disabled={isSubmitting}
+          />
+          <p className="text-xs text-muted-foreground">
+            Opcional. Identificador externo del pedido para trazabilidad.
+          </p>
         </div>
 
         {/* Item search */}

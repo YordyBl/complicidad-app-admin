@@ -720,13 +720,13 @@ describe('InventoryPage — Ver stock en lotes CTA', () => {
     vi.clearAllMocks()
   })
 
-  it('renders "Ver stock en lotes" action card', async () => {
+  it('renders "Gestionar lotes" action card', async () => {
     mockListProducts.mockResolvedValue(successResponse())
 
     const jsx = await InventoryPage({ searchParams: Promise.resolve({}) })
     render(jsx)
 
-    expect(screen.getByText('Ver stock en lotes')).toBeInTheDocument()
+    expect(screen.getByText('Gestionar lotes')).toBeInTheDocument()
   })
 
   it('action card links to /inventory/lots', async () => {
@@ -735,7 +735,7 @@ describe('InventoryPage — Ver stock en lotes CTA', () => {
     const jsx = await InventoryPage({ searchParams: Promise.resolve({}) })
     render(jsx)
 
-    const cta = screen.getByText('Ver stock en lotes')
+    const cta = screen.getByText('Gestionar lotes')
     const link = cta.closest('a')
     expect(link).toHaveAttribute('href', '/inventory/lots')
   })
@@ -747,25 +747,25 @@ describe('InventoryPage — Ver stock en lotes CTA', () => {
     render(jsx)
 
     expect(
-      screen.getByText(/gestionar el stock por lotes/i),
+      screen.getByText(/ajustar stock por lote/i),
     ).toBeInTheDocument()
   })
 
-  it('renders Ver stock en lotes CTA even in error state', async () => {
+  it('renders Gestionar lotes CTA even in error state', async () => {
     mockListProducts.mockResolvedValue(errorResponse('Server error'))
 
     const jsx = await InventoryPage({ searchParams: Promise.resolve({}) })
     render(jsx)
 
-    expect(screen.getByText('Ver stock en lotes')).toBeInTheDocument()
+    expect(screen.getByText('Gestionar lotes')).toBeInTheDocument()
   })
 
-  it('renders Ver stock en lotes CTA in empty state', async () => {
+  it('renders Gestionar lotes CTA in empty state', async () => {
     mockListProducts.mockResolvedValue(emptyResponse())
 
     const jsx = await InventoryPage({ searchParams: Promise.resolve({}) })
     render(jsx)
 
-    expect(screen.getByText('Ver stock en lotes')).toBeInTheDocument()
+    expect(screen.getByText('Gestionar lotes')).toBeInTheDocument()
   })
 })

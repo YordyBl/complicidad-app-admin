@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, PackageOpen } from 'lucide-react'
 
 import {
   Accordion,
@@ -19,8 +19,16 @@ interface ProductRowProps {
   product: ProductListItem
 }
 
+// ── Stock health indicator ──────────────────────────────────
+function stockColor(stock: number): string {
+  if (stock === 0) return 'text-red-600 dark:text-red-400 font-bold'
+  if (stock <= 5) return 'text-amber-600 dark:text-amber-400 font-semibold'
+  return 'text-green-600 dark:text-green-400'
+}
+
 export function ProductRow({ product }: ProductRowProps) {
   const totalStock = product.variants.reduce((sum, v) => sum + v.stock, 0)
+  const hasStockAlert = product.variants.some((v) => v.stock === 0)
 
   return (
     <AccordionItem value={product.id} className="border-b last:border-0">
@@ -28,20 +36,29 @@ export function ProductRow({ product }: ProductRowProps) {
         <div className="flex w-full items-center gap-4 text-sm">
           <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200 text-muted-foreground" />
 
-          {/* Name */}
+          {/* Name + alerts */}
           <div className="flex-1 min-w-0">
-            <Link
-              href={`/inventory/products/${product.id}`}
-              className="font-medium hover:text-primary transition-colors"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {product.name}
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link
+                href={`/inventory/products/${product.id}`}
+                className="font-medium hover:text-primary transition-colors"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {product.name}
+              </Link>
+              {hasStockAlert && (
+                <PackageOpen className="w-3.5 h-3.5 text-amber-500 shrink-0" aria-label="Variante sin stock" />
+              )}
+            </div>
             {product.description && (
               <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
                 {product.description}
               </p>
             )}
+            {/* Mobile stock visible */}
+            <span className={cn('text-xs tabular-nums md:hidden mt-0.5', stockColor(totalStock))}>
+              {totalStock} en stock
+            </span>
           </div>
 
           {/* Price */}
@@ -50,7 +67,7 @@ export function ProductRow({ product }: ProductRowProps) {
           </span>
 
           {/* Total stock */}
-          <span className="hidden md:inline w-12 text-right text-muted-foreground tabular-nums">
+          <span className={cn('hidden md:inline w-14 text-right tabular-nums text-sm', stockColor(totalStock))}>
             {totalStock}
           </span>
 
@@ -83,7 +100,7 @@ export function ProductRow({ product }: ProductRowProps) {
                   <th className="pb-2 font-medium">SKU</th>
                   <th className="pb-2 font-medium hidden sm:table-cell">Atributos</th>
                   <th className="pb-2 font-medium text-right">Stock</th>
-                  <th className="pb-2 font-medium text-right">Precio venta</th>
+                  <th className="pb-2 font-medium text-right">Precio</th>
                   <th className="pb-2 font-medium text-right">Lotes</th>
                 </tr>
               </thead>
@@ -112,7 +129,7 @@ export function ProductRow({ product }: ProductRowProps) {
                         <span className="text-muted-foreground">—</span>
                       )}
                     </td>
-                    <td className="py-2 text-right tabular-nums font-medium">
+                    <td className={cn('py-2 text-right tabular-nums font-medium', stockColor(variant.stock))}>
                       {variant.stock}
                     </td>
                     <td className="py-2 text-right tabular-nums text-muted-foreground">

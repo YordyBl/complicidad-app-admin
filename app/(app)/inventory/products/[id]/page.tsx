@@ -138,7 +138,7 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
             <div>
               <span className="text-muted-foreground">SKU Base</span>
               <p className="font-medium">{product.baseSku || '—'}</p>
@@ -153,6 +153,12 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
                 {product.presalePrice !== null && product.presalePrice !== undefined
                   ? formatPrice(product.presalePrice)
                   : '—'}
+              </p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Stock total</span>
+              <p className="font-medium tabular-nums">
+                {product.variants.reduce((sum, v) => sum + v.stock, 0)}
               </p>
             </div>
           </div>
@@ -184,6 +190,7 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
                   <tr className="border-b text-left">
                     <th className="pb-3 font-medium text-muted-foreground">SKU</th>
                     <th className="pb-3 font-medium text-muted-foreground">Atributos</th>
+                    <th className="pb-3 font-medium text-muted-foreground text-right">Stock</th>
                     <th className="pb-3 font-medium text-muted-foreground">Estado</th>
                     <th className="pb-3 font-medium text-muted-foreground text-right">Lotes</th>
                   </tr>
@@ -206,6 +213,16 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
                             <span className="text-xs text-muted-foreground">—</span>
                           )}
                         </div>
+                      </td>
+                      <td className={cn(
+                        'py-3 pr-4 text-right tabular-nums font-medium',
+                        variant.stock === 0
+                          ? 'text-red-600 dark:text-red-400'
+                          : variant.stock <= 5
+                            ? 'text-amber-600 dark:text-amber-400'
+                            : '',
+                      )}>
+                        {variant.stock}
                       </td>
                       <td className="py-3">
                         <span

@@ -186,7 +186,7 @@ describe('LotAdjustmentForm — compensate mode', () => {
   it('shows the original historical lot as identifiable', () => {
     renderForm('compensate', historicalLot)
     expect(screen.getByText(/PAN-JEA-40/)).toBeInTheDocument()
-    expect(screen.getByText(/HISTORICAL/)).toBeInTheDocument()
+    expect(screen.getByText(/Histórico/)).toBeInTheDocument()
   })
 
   it('shows the reason hint from the backend', () => {

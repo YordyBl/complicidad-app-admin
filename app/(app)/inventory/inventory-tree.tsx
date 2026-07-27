@@ -17,11 +17,11 @@ export function InventoryTree({ items }: InventoryTreeProps) {
   return (
     <div className="w-full">
       {/* Column header */}
-      <div className="flex items-center gap-4 px-4 py-2 border-b bg-muted/30 text-xs font-medium text-muted-foreground">
+      <div className="flex items-center gap-4 px-4 py-2.5 border-b bg-muted/30 text-xs font-medium text-muted-foreground uppercase tracking-wider">
         <span className="w-4 shrink-0" />
-        <span className="flex-1">Nombre</span>
-        <span className="hidden sm:inline w-24 text-right">Precio venta</span>
-        <span className="hidden md:inline w-12 text-right">Stock</span>
+        <span className="flex-1">Producto</span>
+        <span className="hidden sm:inline w-24 text-right">Precio (S/)</span>
+        <span className="hidden md:inline w-14 text-right">Stock</span>
         <span className="hidden md:inline w-16 text-right">Estado</span>
       </div>
 

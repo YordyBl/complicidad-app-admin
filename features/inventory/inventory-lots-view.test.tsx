@@ -208,18 +208,18 @@ describe('InventoryLotsView — variant grouping', () => {
 describe('InventoryLotsView — state badges', () => {
   it('shows INTACT badge for intact lots', () => {
     renderView()
-    const badges = screen.getAllByText('INTACT')
+    const badges = screen.getAllByText('Activo')
     expect(badges.length).toBeGreaterThanOrEqual(2)
   })
 
   it('shows EXHAUSTED badge for exhausted lots', () => {
     renderView()
-    expect(screen.getByText('EXHAUSTED')).toBeInTheDocument()
+    expect(screen.getByText('Agotado')).toBeInTheDocument()
   })
 
   it('shows HISTORICAL badge for historical lots', () => {
     renderView()
-    expect(screen.getByText('HISTORICAL')).toBeInTheDocument()
+    expect(screen.getByText('Histórico')).toBeInTheDocument()
   })
 })
 
@@ -242,9 +242,7 @@ describe('InventoryLotsView — action triggers', () => {
   it('does not show action for lots with allowedAction="none"', () => {
     renderView()
     // The exhausted lot (lot-3) should have no action button
-    const exhaustedRow = screen.getByText('EXHAUSTED').closest('[data-lot-row]')?.parentElement
-    // Just verify that in the EXHAUSTED lot area there's no edit/compensate button
-    expect(screen.queryByText('EXHAUSTED')).toBeInTheDocument()
+    expect(screen.queryByText('Agotado')).toBeInTheDocument()
   })
 
   it('opens edit form when "Editar" is clicked', () => {
@@ -296,7 +294,7 @@ describe('InventoryLotsView — admin visibility', () => {
   it('still renders lot data when canAdjust is false', () => {
     renderView(mockLotsData, false)
     expect(screen.getByText('REM-CLA-M')).toBeInTheDocument()
-    const intactBadges = screen.getAllByText('INTACT')
-    expect(intactBadges.length).toBeGreaterThanOrEqual(2)
+    const activeBadges = screen.getAllByText('Activo')
+    expect(activeBadges.length).toBeGreaterThanOrEqual(2)
   })
 })

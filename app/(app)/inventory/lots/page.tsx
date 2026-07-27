@@ -1,8 +1,9 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { ArrowLeft, Package, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Package, AlertCircle, Layers } from 'lucide-react'
 
 import { Card, CardContent } from '@/components/ui/card'
+import { Separator } from '@/components/ui/separator'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -44,11 +45,13 @@ export default async function InventoryLotsPage({ searchParams }: InventoryLotsP
         </Link>
 
         <div>
-          <h1 className="text-2xl font-bold">Stock en lotes</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl font-bold tracking-tight">Stock en lotes</h1>
+          <p className="text-sm text-muted-foreground mt-1">
             Gestión de lotes y ajustes de inventario.
           </p>
         </div>
+
+        <Separator />
 
         <Card className="border-destructive/50 bg-destructive/5">
           <CardContent className="pt-6 pb-6">
@@ -69,6 +72,14 @@ export default async function InventoryLotsPage({ searchParams }: InventoryLotsP
 
   const { data } = result
 
+  // ── Operational summary (computed from real data) ──────────
+  const allLots = data.variants.flatMap((v) => v.lots)
+  const totalLots = allLots.length
+  const intactLots = allLots.filter((l) => l.state === 'INTACT').length
+  const historicalLots = allLots.filter((l) => l.state === 'HISTORICAL').length
+  const exhaustedLots = allLots.filter((l) => l.state === 'EXHAUSTED').length
+  const totalUnits = allLots.reduce((sum, l) => sum + l.remainingQuantity, 0)
+
   // ── Empty state ───────────────────────────────────────────
   if (data.variants.length === 0) {
     return (
@@ -82,11 +93,13 @@ export default async function InventoryLotsPage({ searchParams }: InventoryLotsP
         </Link>
 
         <div>
-          <h1 className="text-2xl font-bold">Stock en lotes</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl font-bold tracking-tight">Stock en lotes</h1>
+          <p className="text-sm text-muted-foreground mt-1">
             Gestión de lotes y ajustes de inventario.
           </p>
         </div>
+
+        <Separator />
 
         <Card>
           <CardContent className="pt-6 pb-6">
@@ -113,15 +126,74 @@ export default async function InventoryLotsPage({ searchParams }: InventoryLotsP
         className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'gap-1')}
       >
         <ArrowLeft className="w-4 h-4" />
-        Volver
+        Volver a inventario
       </Link>
 
       <div>
-        <h1 className="text-2xl font-bold">Stock en lotes</h1>
-        <p className="text-muted-foreground">
-          Gestión de lotes y ajustes de inventario.
+        <h1 className="text-2xl font-bold tracking-tight">Stock en lotes</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Gestión y trazabilidad de lotes de inventario con ajustes operativos.
         </p>
       </div>
+
+      <Separator />
+
+      {/* ── Operational summary bar ───────────────────── */}
+      {totalLots > 0 && (
+        <section>
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+            Resumen de lotes
+          </h2>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <Card>
+              <CardContent className="p-3 flex flex-col justify-center h-full">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Total lotes
+                </p>
+                <p className="text-lg font-bold tabular-nums mt-0.5">{totalLots}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-3 flex flex-col justify-center h-full">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Intactos
+                </p>
+                <p className="text-lg font-bold tabular-nums mt-0.5 text-green-600 dark:text-green-400">
+                  {intactLots}
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-3 flex flex-col justify-center h-full">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Históricos
+                </p>
+                <p className="text-lg font-bold tabular-nums mt-0.5 text-amber-600 dark:text-amber-400">
+                  {historicalLots}
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-3 flex flex-col justify-center h-full">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Agotados
+                </p>
+                <p className="text-lg font-bold tabular-nums mt-0.5 text-muted-foreground">
+                  {exhaustedLots}
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-3 flex flex-col justify-center h-full">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Unidades
+                </p>
+                <p className="text-lg font-bold tabular-nums mt-0.5">{totalUnits}</p>
+              </CardContent>
+            </Card>
+          </div>
+        </section>
+      )}
 
       <InventoryLotsView
         productId={productId}
@@ -133,8 +205,8 @@ export default async function InventoryLotsPage({ searchParams }: InventoryLotsP
       {/* Product context hint */}
       {data.product && (
         <p className="text-xs text-muted-foreground text-center">
-          Mostrando lotes de{' '}
-          {data.product.name ?? 'Todos los productos'}
+          Lotes de{' '}
+          <span className="font-medium">{data.product.name}</span>
         </p>
       )}
     </div>

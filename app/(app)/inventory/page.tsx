@@ -1,8 +1,9 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { Package, Search, ShoppingCart, Plus, AlertTriangle, AlertCircle, ChevronLeft, ChevronRight, Layers } from 'lucide-react'
+import { Package, Search, ShoppingCart, Plus, AlertTriangle, AlertCircle, ChevronLeft, ChevronRight, Layers, TrendingUp, Boxes } from 'lucide-react'
 
 import { Input } from '@/components/ui/input'
+import { Separator } from '@/components/ui/separator'
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
@@ -36,54 +37,63 @@ export default async function InventoryPage({ searchParams }: InventoryPageProps
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold">Inventario</h1>
-          <p className="text-muted-foreground">Gestión de productos, búsqueda y compras.</p>
+          <h1 className="text-2xl font-bold tracking-tight">Inventario</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Gestión de productos, búsqueda y compras.
+          </p>
         </div>
+
+        <Separator />
 
         {/* Action cards still visible */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Link href="/inventory/products/new">
-            <Card className="hover:border-primary/50 transition-colors cursor-pointer h-full">
-              <CardHeader>
-                <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center mb-3">
-                  <Plus className="w-5 h-5 text-primary" />
-                </div>
-                <CardTitle className="text-base">Nuevo producto</CardTitle>
-                <CardDescription>
-                Registrar un nuevo producto con talles y precios de venta.
-                </CardDescription>
-              </CardHeader>
-            </Card>
-          </Link>
+        <section>
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+            Acciones
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Link href="/inventory/products/new">
+              <Card className="hover:border-primary/50 transition-colors cursor-pointer h-full">
+                <CardHeader>
+                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center mb-3">
+                    <Plus className="w-5 h-5 text-primary" />
+                  </div>
+                  <CardTitle className="text-base">Nuevo producto</CardTitle>
+                  <CardDescription>
+                    Registrar un nuevo producto con talles y precios de venta.
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+            </Link>
 
-          <Link href="/inventory/purchases/new">
-            <Card className="hover:border-primary/50 transition-colors cursor-pointer h-full">
-              <CardHeader>
-                <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center mb-3">
-                  <ShoppingCart className="w-5 h-5 text-primary" />
-                </div>
-                <CardTitle className="text-base">Registrar compra</CardTitle>
-                <CardDescription>
-                  Registrar una nueva compra de inventario asociada a una variante.
-                </CardDescription>
-              </CardHeader>
-            </Card>
-          </Link>
+            <Link href="/inventory/purchases/new">
+              <Card className="hover:border-primary/50 transition-colors cursor-pointer h-full">
+                <CardHeader>
+                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center mb-3">
+                    <ShoppingCart className="w-5 h-5 text-primary" />
+                  </div>
+                  <CardTitle className="text-base">Registrar compra</CardTitle>
+                  <CardDescription>
+                    Registrar una nueva compra de inventario asociada a una variante.
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+            </Link>
 
-          <Link href="/inventory/lots">
-            <Card className="hover:border-primary/50 transition-colors cursor-pointer h-full">
-              <CardHeader>
-                <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center mb-3">
-                  <Layers className="w-5 h-5 text-primary" />
-                </div>
-                <CardTitle className="text-base">Ver stock en lotes</CardTitle>
-                <CardDescription>
-                  Consultar y gestionar el stock por lotes con ajustes de inventario.
-                </CardDescription>
-              </CardHeader>
-            </Card>
-          </Link>
-        </div>
+            <Link href="/inventory/lots">
+              <Card className="hover:border-primary/50 transition-colors cursor-pointer h-full">
+                <CardHeader>
+                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center mb-3">
+                    <Layers className="w-5 h-5 text-primary" />
+                  </div>
+                  <CardTitle className="text-base">Gestionar lotes</CardTitle>
+                  <CardDescription>
+                    Consultar y gestionar el stock por lotes con ajustes de inventario.
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+            </Link>
+          </div>
+        </section>
 
         {/* Error card */}
         <Card className="border-destructive/50 bg-destructive/5">
@@ -107,6 +117,18 @@ export default async function InventoryPage({ searchParams }: InventoryPageProps
   const currentPage = meta.page
   const totalPages = meta.totalPages
 
+  // ── Operational summary (computed from real data) ─────
+  const activeCount = items.filter((p) => p.isActive).length
+  const inactiveCount = items.length - activeCount
+  const totalVariants = items.reduce((sum, p) => sum + p.variants.length, 0)
+  const variantsZeroStock = items.reduce(
+    (sum, p) => sum + p.variants.filter((v) => v.stock === 0).length,
+    0,
+  )
+  const productsZeroStock = items.filter(
+    (p) => p.variants.reduce((s, v) => s + v.stock, 0) === 0,
+  ).length
+
   // ── Build pagination page numbers ────────────────────────
   const pageNumbers: (number | 'ellipsis')[] = []
   if (totalPages <= 7) {
@@ -123,55 +145,136 @@ export default async function InventoryPage({ searchParams }: InventoryPageProps
 
   return (
     <div className="space-y-6">
+      {/* ── Page Header — operational context ─────────── */}
       <div>
-        <h1 className="text-2xl font-bold">Inventario</h1>
-        <p className="text-muted-foreground">Gestión de productos, búsqueda y compras.</p>
+        <h1 className="text-2xl font-bold tracking-tight">Inventario</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Gestión de productos, variantes, compras y stock por lote. Todos los precios en soles peruanos (PEN).
+        </p>
       </div>
 
-      {/* Action cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Link href="/inventory/products/new">
-          <Card className="hover:border-primary/50 transition-colors cursor-pointer h-full">
-            <CardHeader>
-              <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center mb-3">
-                <Plus className="w-5 h-5 text-primary" />
-              </div>
-              <CardTitle className="text-base">Nuevo producto</CardTitle>
-              <CardDescription>
-                Registrar un nuevo producto con su variante inicial, SKU y precio base.
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
+      <Separator />
 
-        <Link href="/inventory/purchases/new">
-          <Card className="hover:border-primary/50 transition-colors cursor-pointer h-full">
-            <CardHeader>
-              <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center mb-3">
-                <ShoppingCart className="w-5 h-5 text-primary" />
-              </div>
-              <CardTitle className="text-base">Registrar compra</CardTitle>
-              <CardDescription>
-                Registrar una nueva compra de inventario asociada a una variante.
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
+      {/* ── Acciones rápidas ─────────────────────────── */}
+      <section>
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+          Acciones
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <Link href="/inventory/products/new">
+            <Card className="hover:border-primary/50 hover:shadow-sm transition-all cursor-pointer h-full">
+              <CardHeader className="pb-3">
+                <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center mb-3">
+                  <Plus className="w-5 h-5 text-primary" />
+                </div>
+                <CardTitle className="text-base">Nuevo producto</CardTitle>
+                <CardDescription>
+                  Registrar producto con variantes, SKU y precio de venta.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
 
-        <Link href="/inventory/lots">
-          <Card className="hover:border-primary/50 transition-colors cursor-pointer h-full">
-            <CardHeader>
-              <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center mb-3">
-                <Layers className="w-5 h-5 text-primary" />
-              </div>
-              <CardTitle className="text-base">Ver stock en lotes</CardTitle>
-              <CardDescription>
-                Consultar y gestionar el stock por lotes con ajustes de inventario.
-              </CardDescription>
-            </CardHeader>
+          <Link href="/inventory/purchases/new">
+            <Card className="hover:border-primary/50 hover:shadow-sm transition-all cursor-pointer h-full">
+              <CardHeader className="pb-3">
+                <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center mb-3">
+                  <ShoppingCart className="w-5 h-5 text-primary" />
+                </div>
+                <CardTitle className="text-base">Registrar compra</CardTitle>
+                <CardDescription>
+                  Ingresar nueva compra de inventario a una variante.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link href="/inventory/lots">
+            <Card className="hover:border-primary/50 hover:shadow-sm transition-all cursor-pointer h-full">
+              <CardHeader className="pb-3">
+                <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center mb-3">
+                  <Layers className="w-5 h-5 text-primary" />
+                </div>
+                <CardTitle className="text-base">Gestionar lotes</CardTitle>
+                <CardDescription>
+                  Consultar y ajustar stock por lote con trazabilidad completa.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+        </div>
+      </section>
+
+      {/* ── Operational summary bar ───────────────────── */}
+      <section>
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+          Resumen operativo
+        </h2>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <Card>
+            <CardContent className="p-3 flex flex-col justify-center h-full">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Productos
+              </p>
+              <p className="text-lg font-bold tabular-nums mt-0.5">
+                {meta.totalItems}
+              </p>
+            </CardContent>
           </Card>
-        </Link>
-      </div>
+          <Card>
+            <CardContent className="p-3 flex flex-col justify-center h-full">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Activos
+              </p>
+              <p className="text-lg font-bold tabular-nums mt-0.5 text-green-600 dark:text-green-400">
+                {activeCount}
+              </p>
+              {inactiveCount > 0 && (
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  {inactiveCount} inactivo{inactiveCount !== 1 ? 's' : ''}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-3 flex flex-col justify-center h-full">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Variantes
+              </p>
+              <p className="text-lg font-bold tabular-nums mt-0.5">
+                {totalVariants}
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-3 flex flex-col justify-center h-full">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Sin stock
+              </p>
+              <p className="text-lg font-bold tabular-nums mt-0.5">
+                {productsZeroStock}
+              </p>
+              {variantsZeroStock > 0 && (
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  {variantsZeroStock} variante{variantsZeroStock !== 1 ? 's' : ''}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-3 flex flex-col justify-center h-full">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Con alerta
+              </p>
+              <p className="text-lg font-bold tabular-nums mt-0.5 text-amber-600 dark:text-amber-400">
+                {variantsZeroStock}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
+      <Separator />
 
       {/* ── Search and filter controls ────────────── */}
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">

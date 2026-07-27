@@ -163,8 +163,8 @@ describe('CashPageClient', () => {
         />,
       )
 
-      expect(screen.getByText('Saldo inicial')).toBeInTheDocument()
-      expect(screen.getByText('S/ 100.00')).toBeInTheDocument()
+      // Opening balance now rendered as "Saldo inicial: S/ 100.00" in BalanceHero
+      expect(screen.getByText(/Saldo inicial:\s*S\/\s*100\.00/)).toBeInTheDocument()
 
       // Ventas brutas = grossSalesCents = 120000 → S/ 1,200.00
       expect(screen.getByText('Ventas brutas')).toBeInTheDocument()

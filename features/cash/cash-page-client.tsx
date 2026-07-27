@@ -31,6 +31,7 @@ import { LoadingState } from '@/components/ui/loading-state'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ErrorState } from '@/components/ui/error-state'
 import { Spinner } from '@/components/ui/spinner'
+import { cn } from '@/lib/utils'
 
 // ── Movement type display ───────────────────────────────────────────
 
@@ -554,221 +555,308 @@ function renderSelectedBoxDetail(params: DetailRenderParams) {
   const canSubmitMovement = movementForm.concept.trim().length > 0 && movementAmountCents !== null && !addingMovement
 
   return (
-    <div className="space-y-6">
-      {/* ── Caja status info ──────────────────────────────────────── */}
-      {selectedBox && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">
-              Caja del {formatDate(selectedBox.businessDate)}
-            </CardTitle>
-            <CardDescription>
-              <Badge variant={selectedBox.status === 'OPEN' ? 'default' : 'secondary'}>
-                {selectedBox.status === 'OPEN' ? 'Abierta' : 'Cerrada'}
-              </Badge>
-              {selectedBox.isCurrent && (
-                <span className="ml-2 text-xs text-muted-foreground">Caja actual</span>
-              )}
-              {selectedBox.status === 'CLOSED' && selectedBox.closedAt && (
-                <span className="ml-2 text-xs text-muted-foreground">
-                  Cerrada el {formatDateTime(selectedBox.closedAt)}
-                </span>
-              )}
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      )}
-
-      {/* ── Summary Cards ─────────────────────────────────────────── */}
+    <div className="space-y-5">
+      {/* ── Hero Balance + Summary ──────────────────────────────── */}
       {summaryLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Card key={i}>
-              <CardHeader className="pb-2">
-                <CardDescription className="text-xs">Cargando...</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-6 bg-muted animate-pulse rounded" />
-              </CardContent>
-            </Card>
-          ))}
+        <div className="space-y-4">
+          {/* Balance skeleton */}
+          <div className="rounded-xl border bg-card overflow-hidden">
+            <div className="flex flex-col lg:flex-row">
+              <div className="flex-1 p-6 space-y-3">
+                <div className="h-3 w-24 bg-muted animate-pulse rounded" />
+                <div className="h-10 w-48 bg-muted animate-pulse rounded" />
+                <div className="h-3 w-32 bg-muted animate-pulse rounded" />
+              </div>
+              <div className="px-6 pb-6 lg:p-5 lg:w-64 space-y-3">
+                <div className="h-5 w-20 bg-muted animate-pulse rounded" />
+                <div className="h-4 w-32 bg-muted animate-pulse rounded" />
+              </div>
+            </div>
+          </div>
+          {/* KPI skeletons */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="rounded-lg border bg-card p-3.5 space-y-2">
+                <div className="h-3 w-16 bg-muted animate-pulse rounded" />
+                <div className="h-5 w-20 bg-muted animate-pulse rounded" />
+              </div>
+            ))}
+          </div>
         </div>
       ) : summaryError ? (
-        <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm" role="alert">
-          {summaryError}
+        <div className="space-y-4">
+          {/* Show box context from selectedBox even on summary error */}
+          {selectedBox && (
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <div className="flex flex-col lg:flex-row">
+                <div className="flex-1 p-5 sm:p-6">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Saldo actual
+                  </p>
+                  <p className="text-3xl sm:text-4xl font-bold tracking-tight tabular-nums mt-1 text-muted-foreground">
+                    —
+                  </p>
+                </div>
+                <div className="px-5 pb-5 sm:px-6 sm:pb-6 lg:p-5 lg:w-64 lg:shrink-0 flex flex-col justify-center gap-2">
+                  <div className="flex items-center gap-2">
+                    <Badge variant={selectedBox.status === 'OPEN' ? 'default' : 'secondary'} className="text-xs">
+                      {selectedBox.status === 'OPEN' ? 'Abierta' : 'Cerrada'}
+                    </Badge>
+                    {selectedBox.isCurrent && (
+                      <span className="text-xs text-muted-foreground">Actual</span>
+                    )}
+                  </div>
+                  <p className="text-sm font-medium">
+                    Caja del {formatDate(selectedBox.businessDate)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm" role="alert">
+            {summaryError}
+          </div>
         </div>
       ) : summary ? (
-        <SummaryMetricsPanel summary={summary} />
+        <div className="space-y-4">
+          <BalanceHero
+            balanceCents={summary.currentBalanceCents}
+            openingBalanceCents={summary.openingBalanceCents}
+            status={selectedBox?.status ?? summary.status}
+            businessDate={selectedBox?.businessDate ?? summary.businessDate}
+            isCurrent={selectedBox?.isCurrent ?? false}
+            closedAt={selectedBox?.closedAt}
+          />
+          <SummaryKpiRow summary={summary} />
+        </div>
+      ) : selectedBox ? (
+        /* Box selected but summary not yet loaded — show context without balance */
+        <div className="rounded-xl border bg-card overflow-hidden">
+          <div className="flex flex-col lg:flex-row">
+            <div className="flex-1 p-5 sm:p-6">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Saldo actual
+              </p>
+              <p className="text-3xl sm:text-4xl font-bold tracking-tight tabular-nums mt-1 text-muted-foreground">
+                —
+              </p>
+            </div>
+            <div className="px-5 pb-5 sm:px-6 sm:pb-6 lg:p-5 lg:w-64 lg:shrink-0 flex flex-col justify-center gap-2">
+              <div className="flex items-center gap-2">
+                <Badge variant={selectedBox.status === 'OPEN' ? 'default' : 'secondary'} className="text-xs">
+                  {selectedBox.status === 'OPEN' ? 'Abierta' : 'Cerrada'}
+                </Badge>
+                {selectedBox.isCurrent && (
+                  <span className="text-xs text-muted-foreground">Actual</span>
+                )}
+              </div>
+              <p className="text-sm font-medium">
+                Caja del {formatDate(selectedBox.businessDate)}
+              </p>
+              {selectedBox.status === 'CLOSED' && selectedBox.closedAt && (
+                <p className="text-xs text-muted-foreground">
+                  Cerrada el {formatDateTime(selectedBox.closedAt)}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {/* ── Mutable Actions (only for current open caja) ──────────── */}
       {canMutateCashBox && (
-        <div className="space-y-4">
-          {/* Close caja */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Cerrar caja</CardTitle>
-              <CardDescription>
-                Cerrá la caja del día. El servidor calcula automáticamente el balance final a partir
-                de los movimientos registrados. Esta acción no se puede deshacer.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {closeActionError && (
-                <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm mb-4" role="alert">
-                  {closeActionError}
-                </div>
-              )}
-              {closeSuccess ? (
-                <div className="p-3 rounded-md bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-300 text-sm">
-                  Caja cerrada exitosamente.
-                </div>
-              ) : showCloseConfirm ? (
-                <div className="space-y-4">
-                  <div className="border border-amber-200 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-900 rounded-lg p-4">
-                    <div className="flex items-start gap-3">
-                      <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-                          ¿Confirmar cierre de caja?
-                        </p>
-                        <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
-                          Esta acción es irreversible. La caja quedará cerrada y no podrá reabrirse
-                          hasta mañana. El servidor calculará el balance final con los movimientos del día.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  {summary && (
-                    <div className="rounded-md border bg-muted/20 px-3 py-2">
-                      <p className="text-xs text-muted-foreground">Saldo actual a cerrar</p>
-                      <p className="text-lg font-semibold">{formatCurrency(summary.currentBalanceCents)}</p>
-                    </div>
-                  )}
-                  <div className="flex gap-2">
-                    <Button
-                      variant="default"
-                      onClick={handleCloseCashBox}
-                      disabled={closingBox}
-                      className="gap-2"
-                    >
-                      <Lock className="w-4 h-4" />
-                      {closingBox ? 'Cerrando...' : 'Sí, cerrar caja'}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setShowCloseConfirm(false)
-                        setCloseActionError(null)
-                      }}
-                    >
-                      Cancelar
-                    </Button>
-                  </div>
-                </div>
-              ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* ── Close caja ─────────────────────────────────────── */}
+          <div className="rounded-lg border bg-card p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-medium">Cerrar caja</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  El balance se calcula automáticamente. Irreversible.
+                </p>
+              </div>
+              {!showCloseConfirm && !closeSuccess && (
                 <Button
                   variant="default"
+                  size="sm"
                   onClick={() => {
                     setShowCloseConfirm(true)
                     setCloseActionError(null)
                   }}
                   disabled={closingBox}
-                  className="gap-2"
+                  className="gap-1.5 shrink-0"
                 >
-                  <Lock className="w-4 h-4" />
+                  <Lock className="w-3.5 h-3.5" />
                   Cerrar caja
                 </Button>
               )}
-            </CardContent>
-          </Card>
+            </div>
 
-          {/* Manual movement */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Movimiento manual</CardTitle>
-              <CardDescription>
-                Registrá un ajuste manual o retiro en la caja actual.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {movementError && (
-                <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm mb-4" role="alert">
-                  {movementError}
-                </div>
-              )}
-              {movementSuccess && (
-                <div className="p-3 rounded-md bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-300 text-sm mb-4">
-                  Movimiento registrado exitosamente.
-                </div>
-              )}
-              <div className="space-y-3">
-                <div className="space-y-2">
-                  <Label htmlFor="movement-concept">Concepto</Label>
-                  <Input
-                    id="movement-concept"
-                    placeholder="Ej: Pago de servicios"
-                    value={movementForm.concept}
-                    onChange={(e) => setMovementForm({ ...movementForm, concept: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="movement-amount">Monto (soles)</Label>
-                  <Input
-                    id="movement-amount"
-                    type="number"
-                    inputMode="decimal"
-                    min="0.01"
-                    step="0.01"
-                    placeholder="Ej: 500.00"
-                    value={movementForm.amount}
-                    onChange={(e) => setMovementForm({ ...movementForm, amount: e.target.value })}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Ingresá siempre un monto positivo. El tipo de movimiento define si suma o resta.
-                  </p>
-                  {movementAmountInvalid && (
-                    <p className="text-xs text-destructive">Ingresá un monto mayor a 0 en soles.</p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="movement-type">Tipo</Label>
-                  <select
-                    id="movement-type"
-                    value={movementForm.type}
-                    onChange={(e) => setMovementForm({ ...movementForm, type: e.target.value as 'MANUAL_ADJUSTMENT' | 'WITHDRAWAL' })}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <option value="MANUAL_ADJUSTMENT">Ajuste manual</option>
-                    <option value="WITHDRAWAL">Retiro</option>
-                  </select>
-                </div>
-                <Button
-                  onClick={handleAddMovement}
-                  disabled={!canSubmitMovement}
-                  className="gap-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  {addingMovement ? 'Registrando...' : 'Registrar movimiento'}
-                </Button>
+            {closeActionError && (
+              <div className="mt-3 p-2.5 rounded-md bg-destructive/10 text-destructive text-xs" role="alert">
+                {closeActionError}
               </div>
-            </CardContent>
-          </Card>
+            )}
+
+            {closeSuccess && (
+              <div className="mt-3 p-2.5 rounded-md bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-300 text-xs">
+                Caja cerrada exitosamente.
+              </div>
+            )}
+
+            {showCloseConfirm && (
+              <div className="mt-4 pt-4 border-t space-y-3">
+                <div className="rounded-md bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 p-3">
+                  <div className="flex items-start gap-2.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-xs font-medium text-amber-800 dark:text-amber-200">
+                        ¿Confirmar cierre de caja?
+                      </p>
+                      <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+                        El servidor calculará el balance final con los movimientos
+                        del día. Esta acción no se puede deshacer.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                {summary && (
+                  <div className="rounded-md border bg-muted/20 px-3 py-2">
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                      Saldo actual a cerrar
+                    </p>
+                    <p className="text-base font-semibold tabular-nums">
+                      {formatCurrency(summary.currentBalanceCents)}
+                    </p>
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleCloseCashBox}
+                    disabled={closingBox}
+                    className="gap-1.5"
+                  >
+                    <Lock className="w-3.5 h-3.5" />
+                    {closingBox ? 'Cerrando...' : 'Sí, cerrar caja'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setShowCloseConfirm(false)
+                      setCloseActionError(null)
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ── Manual movement ─────────────────────────────────── */}
+          <div className="rounded-lg border bg-card p-4">
+            <h3 className="text-sm font-medium">Movimiento manual</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Ajuste manual o retiro en la caja actual.
+            </p>
+
+            {movementError && (
+              <div className="mt-3 p-2.5 rounded-md bg-destructive/10 text-destructive text-xs" role="alert">
+                {movementError}
+              </div>
+            )}
+
+            {movementSuccess && (
+              <div className="mt-3 p-2.5 rounded-md bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-300 text-xs">
+                Movimiento registrado exitosamente.
+              </div>
+            )}
+
+            <div className="mt-4 space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="movement-concept" className="text-xs">
+                  Concepto
+                </Label>
+                <Input
+                  id="movement-concept"
+                  placeholder="Ej: Pago de servicios"
+                  value={movementForm.concept}
+                  onChange={(e) =>
+                    setMovementForm({ ...movementForm, concept: e.target.value })
+                  }
+                  className="h-9 text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="movement-amount" className="text-xs">
+                  Monto (soles)
+                </Label>
+                <Input
+                  id="movement-amount"
+                  type="number"
+                  inputMode="decimal"
+                  min="0.01"
+                  step="0.01"
+                  placeholder="Ej: 500.00"
+                  value={movementForm.amount}
+                  onChange={(e) =>
+                    setMovementForm({ ...movementForm, amount: e.target.value })
+                  }
+                  className="h-9 text-sm"
+                />
+                {movementAmountInvalid && (
+                  <p className="text-xs text-destructive">
+                    Ingresá un monto mayor a 0 en soles.
+                  </p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="movement-type" className="text-xs">
+                  Tipo
+                </Label>
+                <select
+                  id="movement-type"
+                  value={movementForm.type}
+                  onChange={(e) =>
+                    setMovementForm({
+                      ...movementForm,
+                      type: e.target.value as 'MANUAL_ADJUSTMENT' | 'WITHDRAWAL',
+                    })
+                  }
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="MANUAL_ADJUSTMENT">Ajuste manual</option>
+                  <option value="WITHDRAWAL">Retiro</option>
+                </select>
+                <p className="text-[10px] text-muted-foreground">
+                  El tipo define si suma o resta. Ingresá siempre un monto positivo.
+                </p>
+              </div>
+              <Button
+                onClick={handleAddMovement}
+                disabled={!canSubmitMovement}
+                size="sm"
+                className="gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                {addingMovement ? 'Registrando...' : 'Registrar movimiento'}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 
       {/* Read-only indicator for closed/historical */}
       {selectedBoxData && !canMutateCashBox && (
-        <Card>
-          <CardContent className="py-3">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Lock className="w-4 h-4" />
-              {selectedBoxData.status === 'CLOSED'
-                ? 'Esta caja está cerrada. Solo lectura.'
-                : 'Acciones disponibles solo para la caja actual abierta.'}
-            </div>
-          </CardContent>
-        </Card>
+        <div className="rounded-lg border bg-muted/30 px-4 py-3 flex items-center gap-2 text-sm text-muted-foreground">
+          <Lock className="w-4 h-4 shrink-0" />
+          {selectedBoxData.status === 'CLOSED'
+            ? 'Esta caja está cerrada. Solo lectura.'
+            : 'Acciones disponibles solo para la caja actual abierta.'}
+        </div>
       )}
 
       {/* ── Movement History ──────────────────────────────────────── */}
@@ -896,59 +984,111 @@ function renderSelectedBoxDetail(params: DetailRenderParams) {
   )
 }
 
-function SummaryMetricsPanel({ summary }: { summary: CashBoxSummary }) {
-  const metrics: Array<{
-    label: string
-    value: number
-    tone: 'positive' | 'negative' | 'neutral' | 'strong'
-    icon: ReactNode
-  }> = [
-    { label: 'Saldo inicial', value: summary.openingBalanceCents, tone: 'neutral', icon: <Wallet className="w-3 h-3" /> },
-    { label: 'Ventas brutas', value: summary.grossSalesCents, tone: 'positive', icon: <TrendingUp className="w-3 h-3" /> },
-    { label: 'Compras', value: summary.purchaseOutflowCents, tone: 'negative', icon: <ShoppingCart className="w-3 h-3" /> },
-    { label: 'Devoluciones', value: summary.returnOutflowCents, tone: 'negative', icon: <ShoppingCart className="w-3 h-3" /> },
-    { label: 'Ingresos', value: summary.manualAdjustmentsCents, tone: summary.manualAdjustmentsCents >= 0 ? 'positive' : 'negative', icon: <Banknote className="w-3 h-3" /> },
-    { label: 'Retiros', value: summary.withdrawalsCents, tone: 'negative', icon: <Banknote className="w-3 h-3" /> },
-  ]
+// ── Balance Hero ────────────────────────────────────────────────────
+// Dominant monetary anchor for the cash page. Mirrors the operational
+// emphasis pattern established in the dashboard KPI area.
+
+function BalanceHero({
+  balanceCents,
+  openingBalanceCents,
+  status,
+  businessDate,
+  isCurrent,
+  closedAt,
+}: {
+  balanceCents: number
+  openingBalanceCents: number
+  status: string
+  businessDate: string
+  isCurrent?: boolean
+  closedAt?: string | null
+}) {
+  const isOpen = status === 'OPEN'
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <CardTitle className="text-base">Resumen de caja</CardTitle>
-            <CardDescription>Movimientos acumulados de la caja seleccionada.</CardDescription>
-          </div>
-          <div className="text-right">
-            <p className="text-xs text-muted-foreground">Saldo actual</p>
-            <p className="text-2xl font-bold">{formatCurrency(summary.currentBalanceCents)}</p>
-          </div>
+    <div className="rounded-xl border bg-card overflow-hidden">
+      <div className="flex flex-col lg:flex-row">
+        {/* Left: Balance dominant — takes most space */}
+        <div className="flex-1 p-5 sm:p-6 lg:border-r border-border">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Saldo actual
+          </p>
+          <p
+            className={cn(
+              'text-3xl sm:text-4xl font-bold tracking-tight tabular-nums mt-1',
+              balanceCents > 0 && 'text-green-700 dark:text-green-400',
+              balanceCents < 0 && 'text-red-700 dark:text-red-400',
+              balanceCents === 0 && 'text-foreground',
+            )}
+          >
+            {formatCurrency(balanceCents)}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1.5">
+            Saldo inicial: {formatCurrency(openingBalanceCents)}
+          </p>
         </div>
-      </CardHeader>
-      <CardContent>
-        <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-          {metrics.map((metric) => (
-            <div key={metric.label} className="rounded-md border bg-muted/20 px-3 py-2">
-              <dt className="flex items-center gap-1 text-xs text-muted-foreground">
-                {metric.icon}
-                {metric.label}
-              </dt>
-              <dd className={`mt-1 text-sm font-semibold ${summaryMetricToneClass(metric.tone)}`}>
-                {formatCurrency(metric.value)}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      </CardContent>
-    </Card>
+
+        {/* Right: Context & status — narrow column */}
+        <div className="px-5 pb-5 sm:px-6 sm:pb-6 lg:p-5 lg:w-64 lg:shrink-0 flex flex-col justify-center gap-2">
+          <div className="flex items-center gap-2">
+            <Badge variant={isOpen ? 'default' : 'secondary'} className="text-xs">
+              {isOpen ? 'Abierta' : 'Cerrada'}
+            </Badge>
+            {isCurrent && (
+              <span className="text-xs text-muted-foreground">Actual</span>
+            )}
+          </div>
+          <p className="text-sm font-medium">
+            Caja del {formatDate(businessDate)}
+          </p>
+          {!isOpen && closedAt && (
+            <p className="text-xs text-muted-foreground">
+              Cerrada el {formatDateTime(closedAt)}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }
 
-function summaryMetricToneClass(tone: 'positive' | 'negative' | 'neutral' | 'strong') {
-  return {
-    positive: 'text-green-600 dark:text-green-400',
-    negative: 'text-red-600 dark:text-red-400',
-    neutral: 'text-muted-foreground',
-    strong: 'text-foreground',
-  }[tone]
+// ── Summary KPI Row ──────────────────────────────────────────────────
+// Compact metric cards styled after the dashboard KPI pattern.
+
+function SummaryKpiRow({ summary }: { summary: CashBoxSummary }) {
+  const kpis: Array<{
+    label: string
+    value: number
+    tone: 'positive' | 'negative' | 'neutral'
+    icon: ReactNode
+  }> = [
+    { label: 'Ventas brutas', value: summary.grossSalesCents, tone: 'positive', icon: <TrendingUp className="w-4 h-4" /> },
+    { label: 'Compras', value: summary.purchaseOutflowCents, tone: 'negative', icon: <ShoppingCart className="w-4 h-4" /> },
+    { label: 'Devoluciones', value: summary.returnOutflowCents, tone: 'negative', icon: <ShoppingCart className="w-4 h-4" /> },
+    { label: 'Ingresos', value: summary.manualAdjustmentsCents, tone: summary.manualAdjustmentsCents >= 0 ? 'positive' : 'negative', icon: <Banknote className="w-4 h-4" /> },
+    { label: 'Retiros', value: summary.withdrawalsCents, tone: 'negative', icon: <Wallet className="w-4 h-4" /> },
+  ]
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      {kpis.map((kpi) => (
+        <div key={kpi.label} className="rounded-lg border bg-card p-3.5">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+            {kpi.icon}
+            <span>{kpi.label}</span>
+          </div>
+          <p
+            className={cn(
+              'text-sm font-semibold tabular-nums',
+              kpi.tone === 'positive' && 'text-green-600 dark:text-green-400',
+              kpi.tone === 'negative' && 'text-red-600 dark:text-red-400',
+              kpi.tone === 'neutral' && 'text-foreground',
+            )}
+          >
+            {formatCurrency(kpi.value)}
+          </p>
+        </div>
+      ))}
+    </div>
+  )
 }

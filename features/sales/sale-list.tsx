@@ -212,7 +212,18 @@ export async function SaleListContent({ query }: { query?: SalesListQuery }) {
             <table className="w-full">
               <thead>
                 <tr className="border-b text-xs text-muted-foreground">
-                  <th className="text-left py-3 px-4 font-medium">ID</th>
+                  <th className="text-right py-3 px-4 font-medium">
+                    <Link
+                      href={buildSalesPageUrl(currentQuery, toggleSort(currentQuery, 'createdAt'))}
+                      className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+                      aria-label="Ordenar por fecha"
+                      scroll={false}
+                    >
+                      Fecha
+                      <SortIcon query={currentQuery} field="createdAt" />
+                    </Link>
+                  </th>
+                  <th className="text-left py-3 px-4 font-medium">Cliente</th>
                   <th className="text-left py-3 px-4 font-medium">Canal</th>
                   <th className="text-left py-3 px-4 font-medium">Estado</th>
                   <th className="text-right py-3 px-4 font-medium">
@@ -253,17 +264,7 @@ export async function SaleListContent({ query }: { query?: SalesListQuery }) {
                   <th className="text-left py-3 px-4 font-medium">Estado Pago</th>
                   <th className="text-right py-3 px-4 font-medium">Pagado</th>
                   <th className="text-right py-3 px-4 font-medium">Pendiente</th>
-                  <th className="text-right py-3 px-4 font-medium">
-                    <Link
-                      href={buildSalesPageUrl(currentQuery, toggleSort(currentQuery, 'createdAt'))}
-                      className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
-                      aria-label="Ordenar por fecha"
-                      scroll={false}
-                    >
-                      Fecha
-                      <SortIcon query={currentQuery} field="createdAt" />
-                    </Link>
-                  </th>
+                  <th className="text-left py-3 px-4 font-medium">ID</th>
                   <th className="text-right py-3 px-4 font-medium" />
                 </tr>
               </thead>
@@ -273,28 +274,34 @@ export async function SaleListContent({ query }: { query?: SalesListQuery }) {
                     key={sale.saleId}
                     className="border-b last:border-b-0 hover:bg-muted/50 transition-colors"
                   >
+                    <td className="py-3 px-4 text-xs text-right text-muted-foreground whitespace-nowrap tabular-nums">
+                      {formatDateTime(sale.createdAt)}
+                    </td>
                     <td className="py-3 px-4">
                       <Link
                         href={`/sales/${sale.saleId}`}
-                        className="text-sm font-mono text-primary hover:underline"
+                        className="text-sm font-medium hover:underline"
                       >
-                        {sale.saleId.slice(0, 8)}...
+                        {sale.customerName || '—'}
                       </Link>
                     </td>
                     <td className="py-3 px-4 text-sm">{saleChannelLabels[sale.channel as keyof typeof saleChannelLabels] ?? sale.channel}</td>
                     <td className="py-3 px-4">
                       <StatusBadge status={sale.status} />
                     </td>
-                    <td className="py-3 px-4 text-sm text-right">
+                    <td className="py-3 px-4 text-sm text-right font-medium tabular-nums">
                       {formatCurrency(sale.totalRevenueCents)}
                     </td>
-                    <td className="py-3 px-4 text-sm text-right text-muted-foreground">
+                    <td className="py-3 px-4 text-sm text-right text-muted-foreground tabular-nums">
                       {formatCurrency(sale.totalCostCents)}
                     </td>
-                    <td className="py-3 px-4 text-sm text-right font-medium">
+                    <td className={cn(
+                      'py-3 px-4 text-sm text-right font-semibold tabular-nums',
+                      sale.grossProfitCents >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400',
+                    )}>
                       {formatCurrency(sale.grossProfitCents)}
                     </td>
-                    <td className="py-3 px-4 text-sm text-right">
+                    <td className="py-3 px-4 text-sm text-right tabular-nums">
                       {sale.lineCount}
                     </td>
                     <td className="py-3 px-4">
@@ -303,14 +310,22 @@ export async function SaleListContent({ query }: { query?: SalesListQuery }) {
                     <td className="py-3 px-4">
                       <PaymentStatusBadge status={sale.paymentStatus} />
                     </td>
-                    <td className="py-3 px-4 text-sm text-right">
+                    <td className="py-3 px-4 text-sm text-right tabular-nums">
                       {formatCurrency(sale.amountPaidCents)}
                     </td>
-                    <td className="py-3 px-4 text-sm text-right font-medium">
+                    <td className={cn(
+                      'py-3 px-4 text-sm text-right font-medium tabular-nums',
+                      sale.pendingBalanceCents > 0 && 'text-amber-600 dark:text-amber-400',
+                    )}>
                       {formatCurrency(sale.pendingBalanceCents)}
                     </td>
-                    <td className="py-3 px-4 text-xs text-right text-muted-foreground">
-                      {formatDateTime(sale.createdAt)}
+                    <td className="py-3 px-4">
+                      <Link
+                        href={`/sales/${sale.saleId}`}
+                        className="text-xs font-mono text-muted-foreground hover:text-primary transition-colors"
+                      >
+                        {sale.saleId.slice(0, 8)}...
+                      </Link>
                     </td>
                     <td className="py-3 px-4 text-right">
                       <SaleSettlementButton

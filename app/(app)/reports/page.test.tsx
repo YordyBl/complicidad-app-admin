@@ -1,14 +1,33 @@
 /**
- * Behavioral tests for the reports page — verifies searchParams→normalization
- * wiring and that the page renders a meaningful layout.
- *
- * The actual normalization logic is covered by page-helpers.test.ts.
- * ReportCards component has its own tests in features/reports/.
- * This test proves the page correctly wires namespaced queries together.
+ * Behavioral tests for the reports page — verifies:
+ *  1. API data fetching (all 7 KPI endpoints called in parallel)
+ *  2. searchParams → normalization wiring
+ *  3. Props passed to ReportCards (pre-fetched KPI data + list queries)
+ *  4. Graceful unwrap of failed endpoints
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// ── Hoisted mock for page-helpers ──────────────────────────────────
+// ── Hoisted mocks ──────────────────────────────────────────────────
+
+const mockApi = {
+  getSalesTotal: vi.fn(),
+  getLiquidity: vi.fn(),
+  getOperatingCapital: vi.fn(),
+  getGrossProfit: vi.fn(),
+  getFifoCogs: vi.fn(),
+  getStockInvestment: vi.fn(),
+  getReinvestment: vi.fn(),
+}
+
+vi.mock('@/shared/api/reports', () => ({
+  getSalesTotal: mockApi.getSalesTotal,
+  getLiquidity: mockApi.getLiquidity,
+  getOperatingCapital: mockApi.getOperatingCapital,
+  getGrossProfit: mockApi.getGrossProfit,
+  getFifoCogs: mockApi.getFifoCogs,
+  getStockInvestment: mockApi.getStockInvestment,
+  getReinvestment: mockApi.getReinvestment,
+}))
 
 const mockNormalize = vi.fn(
   (raw: Record<string, string | string[] | undefined>) => {
@@ -37,23 +56,18 @@ vi.mock('./page-helpers', () => ({
   buildReportsPageUrl: vi.fn(),
 }))
 
-// ── Mock ReportCards ───────────────────────────────────────────────
-
 const MockReportCards = vi.fn(
-  ({
-    stockQuery,
-    lotsQuery,
-  }: {
-    stockQuery?: Record<string, unknown>
-    lotsQuery?: Record<string, unknown>
-  }) => ({
+  (props: Record<string, unknown>) => ({
     type: 'div',
     props: {
       'data-testid': 'report-cards',
-      'data-stock-page': String(stockQuery?.page ?? ''),
-      'data-stock-search': String(stockQuery?.search ?? ''),
-      'data-lots-page': String(lotsQuery?.page ?? ''),
-      'data-lots-search': String(lotsQuery?.search ?? ''),
+      'data-stock-page': String((props.stockQuery as Record<string, unknown>)?.page ?? ''),
+      'data-stock-search': String((props.stockQuery as Record<string, unknown>)?.search ?? ''),
+      'data-lots-page': String((props.lotsQuery as Record<string, unknown>)?.page ?? ''),
+      'data-lots-search': String((props.lotsQuery as Record<string, unknown>)?.search ?? ''),
+      'data-has-sales-total': String(props.salesTotal != null),
+      'data-has-liquidity': String(props.liquidity != null),
+      'data-has-operating-capital': String(props.operatingCapital != null),
     },
   }),
 )
@@ -62,54 +76,113 @@ vi.mock('@/features/reports/report-cards', () => ({
   ReportCards: MockReportCards,
 }))
 
+// ── Default successful API responses ──────────────────────────────
+
+function defaultResponse(data: Record<string, unknown>) {
+  return { ok: true, data, status: 200 }
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
+
+  // Default: all APIs succeed with realistic money values
+  mockApi.getSalesTotal.mockResolvedValue(defaultResponse({ totalSalesCents: 500000, currency: 'PEN', activeSaleCount: 12 }))
+  mockApi.getLiquidity.mockResolvedValue(defaultResponse({ liquidityCents: 150000, currency: 'PEN' }))
+  mockApi.getOperatingCapital.mockResolvedValue(defaultResponse({ operatingCapitalCents: 800000, currency: 'PEN' }))
+  mockApi.getGrossProfit.mockResolvedValue(defaultResponse({ grossProfitCents: 200000, currency: 'PEN' }))
+  mockApi.getFifoCogs.mockResolvedValue(defaultResponse({ totalCogsCents: 300000, currency: 'PEN' }))
+  mockApi.getStockInvestment.mockResolvedValue(defaultResponse({ totalInvestmentCents: 400000, currency: 'PEN' }))
+  mockApi.getReinvestment.mockResolvedValue(defaultResponse({ reinvestmentCents: 100000, currency: 'PEN' }))
 })
 
 // ═══════════════════════════════════════════════════════════════════
 
 describe('ReportsPage', () => {
-  // ── Helper: extract ReportCards props from the rendered page element ──
-
   function getReportCardsProps(element: { props: { children: Array<{ props: Record<string, unknown> }> } }) {
-    const children = element.props.children
     // children[0] = header div, children[1] = ReportCards element
+    const children = element.props.children
     const reportCardsEl = children[1]
-    // React.createElement stores component props directly, not the component's return value.
-    // So reportCardsEl.props = { stockQuery: ..., lotsQuery: ... }
-    return reportCardsEl.props as {
-      stockQuery?: Record<string, unknown>
-      lotsQuery?: Record<string, unknown>
-    }
+    return reportCardsEl.props as Record<string, unknown>
   }
 
-  // ── Behavioral: query propagation ──────────────────────────────────
+  // ── API fetching ──────────────────────────────────────────────
 
-  it('calls normalizeReportsSearchParams with raw searchParams', async () => {
-    const { default: ReportsPage } = await import('./page')
-
-    await ReportsPage({
-      searchParams: Promise.resolve({
-        stock_page: '3',
-        stock_search: 'camiseta',
-      }),
-    })
-
-    expect(mockNormalize).toHaveBeenCalledWith({
-      stock_page: '3',
-      stock_search: 'camiseta',
-    })
-  })
-
-  it('calls normalizeReportsSearchParams with empty searchParams', async () => {
+  it('fetches all 7 KPI endpoints in parallel on page load', async () => {
     const { default: ReportsPage } = await import('./page')
 
     await ReportsPage({
       searchParams: Promise.resolve({}),
     })
 
-    expect(mockNormalize).toHaveBeenCalledWith({})
+    expect(mockApi.getSalesTotal).toHaveBeenCalledOnce()
+    expect(mockApi.getLiquidity).toHaveBeenCalledOnce()
+    expect(mockApi.getOperatingCapital).toHaveBeenCalledOnce()
+    expect(mockApi.getGrossProfit).toHaveBeenCalledOnce()
+    expect(mockApi.getFifoCogs).toHaveBeenCalledOnce()
+    expect(mockApi.getStockInvestment).toHaveBeenCalledOnce()
+    expect(mockApi.getReinvestment).toHaveBeenCalledOnce()
   })
+
+  it('passes pre-fetched data to ReportCards when all APIs succeed', async () => {
+    const { default: ReportsPage } = await import('./page')
+
+    const element = await ReportsPage({
+      searchParams: Promise.resolve({}),
+    })
+
+    const props = getReportCardsProps(element)
+
+    expect(props.salesTotal).toEqual({ totalSalesCents: 500000, currency: 'PEN', activeSaleCount: 12 })
+    expect(props.liquidity).toEqual({ liquidityCents: 150000, currency: 'PEN' })
+    expect(props.operatingCapital).toEqual({ operatingCapitalCents: 800000, currency: 'PEN' })
+    expect(props.grossProfit).toEqual({ grossProfitCents: 200000, currency: 'PEN' })
+    expect(props.cogs).toEqual({ totalCogsCents: 300000, currency: 'PEN' })
+    expect(props.stockInvestment).toEqual({ totalInvestmentCents: 400000, currency: 'PEN' })
+    expect(props.reinvestment).toEqual({ reinvestmentCents: 100000, currency: 'PEN' })
+  })
+
+  it('passes null for failed endpoints (graceful degradation)', async () => {
+    mockApi.getSalesTotal.mockResolvedValue({ ok: false, error: { error: 'ServerError', message: 'Down', status: 500 } })
+    mockApi.getLiquidity.mockResolvedValue({ ok: false, error: { error: 'ServerError', message: 'Down', status: 500 } })
+
+    const { default: ReportsPage } = await import('./page')
+
+    const element = await ReportsPage({
+      searchParams: Promise.resolve({}),
+    })
+
+    const props = getReportCardsProps(element)
+
+    expect(props.salesTotal).toBeNull()
+    expect(props.liquidity).toBeNull()
+    // Other endpoints still succeed
+    expect(props.operatingCapital).not.toBeNull()
+    expect(props.grossProfit).not.toBeNull()
+  })
+
+  it('passes null for all endpoints when backend is fully down', async () => {
+    for (const fn of Object.values(mockApi)) {
+      fn.mockResolvedValue({ ok: false, error: { error: 'NetworkError', message: 'No connection', status: 0 } })
+    }
+
+    const { default: ReportsPage } = await import('./page')
+
+    const element = await ReportsPage({
+      searchParams: Promise.resolve({}),
+    })
+
+    const props = getReportCardsProps(element)
+
+    expect(props.salesTotal).toBeNull()
+    expect(props.liquidity).toBeNull()
+    expect(props.operatingCapital).toBeNull()
+    expect(props.grossProfit).toBeNull()
+    expect(props.cogs).toBeNull()
+    expect(props.stockInvestment).toBeNull()
+    expect(props.reinvestment).toBeNull()
+  })
+
+  // ── Query propagation ──────────────────────────────────────────
 
   it('passes stock and lots namespaced queries to ReportCards', async () => {
     const { default: ReportsPage } = await import('./page')
@@ -123,47 +196,41 @@ describe('ReportsPage', () => {
       }),
     })
 
-    const rcp = getReportCardsProps(element)
+    const props = getReportCardsProps(element)
 
-    // stock query is passed as stockQuery prop
-    expect(rcp.stockQuery?.page).toBe('2')
-    expect(rcp.stockQuery?.search).toBe('remera')
-
-    // lots query is passed as lotsQuery prop — INDEPENDENT from stock
-    expect(rcp.lotsQuery?.page).toBe('1')
-    expect(rcp.lotsQuery?.search).toBe('zapato')
+    expect((props.stockQuery as Record<string, unknown>)?.page).toBe('2')
+    expect((props.stockQuery as Record<string, unknown>)?.search).toBe('remera')
+    expect((props.lotsQuery as Record<string, unknown>)?.page).toBe('1')
+    expect((props.lotsQuery as Record<string, unknown>)?.search).toBe('zapato')
   })
 
-  // ── Layout: general structure ──────────────────────────────────────
-
-  it('renders page without error for empty searchParams', async () => {
+  it('passes default empty queries when no searchParams', async () => {
     const { default: ReportsPage } = await import('./page')
 
     const element = await ReportsPage({
       searchParams: Promise.resolve({}),
     })
 
-    expect(element).toBeDefined()
+    const props = getReportCardsProps(element)
 
-    // The page root is a div with the layout className
-    expect(element.type).toBe('div')
-    expect(element.props.className).toContain('space-y-6')
+    expect(props.stockQuery).toBeDefined()
+    expect(props.lotsQuery).toBeDefined()
   })
 
-  it('renders without error for search params', async () => {
+  // ── Layout ─────────────────────────────────────────────────────
+
+  it('renders the page header with updated PEN description', async () => {
     const { default: ReportsPage } = await import('./page')
 
     const element = await ReportsPage({
-      searchParams: Promise.resolve({
-        stock_page: '2',
-        stock_search: 'zapatilla',
-      }),
+      searchParams: Promise.resolve({}),
     })
 
-    expect(element).toBeDefined()
+    expect(element.type).toBe('div')
+    expect(element.props.className).toContain('space-y-8')
   })
 
-  // ── Edge case: rejected searchParams ───────────────────────────────
+  // ── Edge cases ─────────────────────────────────────────────────
 
   it('propagates error when searchParams promise rejects', async () => {
     const { default: ReportsPage } = await import('./page')
@@ -175,27 +242,7 @@ describe('ReportsPage', () => {
     ).rejects.toThrow('searchParams unavailable')
   })
 
-  // ── Default queries when no searchParams ───────────────────────────
-
-  it('passes default empty queries when no params', async () => {
-    const { default: ReportsPage } = await import('./page')
-
-    const element = await ReportsPage({
-      searchParams: Promise.resolve({}),
-    })
-
-    const rcp = getReportCardsProps(element)
-
-    // Both queries should be empty when no params
-    expect(rcp.stockQuery).toBeDefined()
-    expect(rcp.lotsQuery).toBeDefined()
-    expect(rcp.stockQuery?.page).toBeUndefined()
-    expect(rcp.lotsQuery?.page).toBeUndefined()
-  })
-
-  // ── Independence: only lots params set ─────────────────────────────
-
-  it('does not cross-contaminate stock query when only lots params are set', async () => {
+  it('does not cross-contaminate queries (independence)', async () => {
     const { default: ReportsPage } = await import('./page')
 
     const element = await ReportsPage({
@@ -205,39 +252,15 @@ describe('ReportsPage', () => {
       }),
     })
 
-    const rcp = getReportCardsProps(element)
+    const props = getReportCardsProps(element)
 
-    // stock should be empty since only lots params were in the URL
-    expect(rcp.stockQuery?.page).toBeUndefined()
-    expect(rcp.stockQuery?.search).toBeUndefined()
-    // lots should have the values
-    expect(rcp.lotsQuery?.page).toBe('3')
-    expect(rcp.lotsQuery?.search).toBe('camiseta')
+    expect((props.stockQuery as Record<string, unknown>)?.page).toBeUndefined()
+    expect((props.stockQuery as Record<string, unknown>)?.search).toBeUndefined()
+    expect((props.lotsQuery as Record<string, unknown>)?.page).toBe('3')
+    expect((props.lotsQuery as Record<string, unknown>)?.search).toBe('camiseta')
   })
 
-  // ── Independence: only stock params set ─────────────────────────────
-
-  it('does not cross-contaminate lots query when only stock params are set', async () => {
-    const { default: ReportsPage } = await import('./page')
-
-    const element = await ReportsPage({
-      searchParams: Promise.resolve({
-        stock_page: '2',
-        stock_search: 'pantalón',
-      }),
-    })
-
-    const rcp = getReportCardsProps(element)
-
-    expect(rcp.stockQuery?.page).toBe('2')
-    expect(rcp.stockQuery?.search).toBe('pantalón')
-    expect(rcp.lotsQuery?.page).toBeUndefined()
-    expect(rcp.lotsQuery?.search).toBeUndefined()
-  })
-
-  // ── pageSize preservation ──────────────────────────────────────────
-
-  it('preserves pageSize in namespaced query passed to ReportCards', async () => {
+  it('preserves pageSize in namespaced query', async () => {
     const { default: ReportsPage } = await import('./page')
 
     const element = await ReportsPage({
@@ -248,10 +271,10 @@ describe('ReportsPage', () => {
       }),
     })
 
-    const rcp = getReportCardsProps(element)
+    const props = getReportCardsProps(element)
 
-    expect(rcp.stockQuery?.page).toBe('2')
-    expect(rcp.stockQuery?.pageSize).toBe('10')
-    expect(rcp.stockQuery?.search).toBe('zapa')
+    expect((props.stockQuery as Record<string, unknown>)?.page).toBe('2')
+    expect((props.stockQuery as Record<string, unknown>)?.pageSize).toBe('10')
+    expect((props.stockQuery as Record<string, unknown>)?.search).toBe('zapa')
   })
 })

@@ -34,6 +34,12 @@ export interface LotAdjustmentFormProps {
 
 // ── Mode-specific copy ─────────────────────────────────────────
 
+const STATE_LABELS: Record<string, string> = {
+  INTACT: 'Activo',
+  HISTORICAL: 'Histórico',
+  EXHAUSTED: 'Agotado',
+}
+
 const MODE_LABELS: Record<LotFormMode, { title: string; intent: string; stockEffect: string }> = {
   increase: {
     title: 'Nuevo ingreso de stock',
@@ -145,7 +151,7 @@ export function LotAdjustmentForm({
               lot.state === 'EXHAUSTED' && 'bg-muted text-muted-foreground',
             )}
           >
-            {lot.state}
+            {STATE_LABELS[lot.state] ?? lot.state}
           </Badge>
         </div>
 

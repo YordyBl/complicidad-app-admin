@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { SaleDocumentsCard } from '@/features/sales/sale-documents-card'
 import { DeliveryMessageDialog } from '@/features/sales/delivery-message-dialog'
+import { SaleSettlementButton } from '@/features/sales/sale-settlement-button'
 
 export function SaleDetailContent({
   sale,
@@ -35,27 +36,49 @@ export function SaleDetailContent({
         </Button>
       </div>
 
-      {/* Sale header */}
+      {/* Sale header — KPI-style money */}
       <Card>
         <CardHeader className="flex flex-row items-start justify-between gap-4">
           <div className="space-y-1">
-            <CardTitle className="text-xl">Venta #{sale.id.slice(0, 8)}</CardTitle>
-            <CardDescription>
-              {formatDateTime(sale.createdAt)}
+            <CardTitle className="text-xl flex items-center gap-2">
+              Venta #{sale.id.slice(0, 8)}
+            </CardTitle>
+            <CardDescription className="flex items-center gap-2">
+              <span>{formatDateTime(sale.createdAt)}</span>
+              <span className="text-muted-foreground/40">·</span>
+              <span>{saleChannelLabels[sale.channel as keyof typeof saleChannelLabels] ?? sale.channel}</span>
             </CardDescription>
           </div>
           <StatusBadge status={sale.status} />
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <DetailItem label="Canal" value={saleChannelLabels[sale.channel as keyof typeof saleChannelLabels] ?? sale.channel} />
-            <DetailItem label="Ingreso total" value={formatCurrency(sale.totalRevenueCents)} />
-            <DetailItem label="Costo total" value={formatCurrency(sale.totalCostCents)} />
-            <DetailItem
-              label="Ganancia bruta"
-              value={formatCurrency(sale.grossProfitCents)}
-              valueClass="font-medium text-green-600"
-            />
+            <div>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Ingreso</p>
+              <p className="text-xl sm:text-2xl font-bold tracking-tight tabular-nums mt-0.5">
+                {formatCurrency(sale.totalRevenueCents)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Costo</p>
+              <p className="text-xl sm:text-2xl font-bold tracking-tight tabular-nums mt-0.5 text-muted-foreground">
+                {formatCurrency(sale.totalCostCents)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Ganancia</p>
+              <p className={`text-xl sm:text-2xl font-bold tracking-tight tabular-nums mt-0.5 ${
+                sale.grossProfitCents >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+              }`}>
+                {formatCurrency(sale.grossProfitCents)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Líneas</p>
+              <p className="text-xl sm:text-2xl font-bold tracking-tight tabular-nums mt-0.5">
+                {sale.lines.length}
+              </p>
+            </div>
           </div>
           <div className="text-xs text-muted-foreground">
             ID: <span className="font-mono">{sale.id}</span>
@@ -94,23 +117,39 @@ export function SaleDetailContent({
         </Card>
       )}
 
-      {/* Payment snapshot */}
-      <Card>
-        <CardHeader>
+      {/* Payment snapshot — prominent when pending */}
+      <Card className={(sale.pendingBalanceCents ?? 0) > 0 ? 'border-amber-200 dark:border-amber-900' : ''}>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-lg">Estado de pago</CardTitle>
+          <PaymentStatusBadge status={sale.paymentStatus ?? 'pending'} />
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <DetailItem
-              label="Estado"
-              value={<PaymentStatusBadge status={sale.paymentStatus ?? 'pending'} />}
-            />
-            <DetailItem label="Pagado" value={formatCurrency(sale.amountPaidCents ?? 0)} />
-            <DetailItem
-              label="Pendiente"
-              value={formatCurrency(sale.pendingBalanceCents ?? 0)}
-              valueClass={(sale.pendingBalanceCents ?? 0) === 0 ? 'text-green-600 font-medium' : ''}
-            />
+            <div>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Pagado</p>
+              <p className="text-lg font-bold tabular-nums mt-0.5">
+                {formatCurrency(sale.amountPaidCents ?? 0)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Pendiente</p>
+              <p className={`text-lg font-bold tabular-nums mt-0.5 ${
+                (sale.pendingBalanceCents ?? 0) === 0
+                  ? 'text-green-600 dark:text-green-400'
+                  : 'text-amber-600 dark:text-amber-400'
+              }`}>
+                {formatCurrency(sale.pendingBalanceCents ?? 0)}
+              </p>
+            </div>
+            {(sale.pendingBalanceCents ?? 0) > 0 && (
+              <div className="col-span-2 flex items-center">
+                <SaleSettlementButton
+                  saleId={sale.id}
+                  canSettleBalance={true}
+                  pendingBalanceCents={sale.pendingBalanceCents ?? 0}
+                />
+              </div>
+            )}
             {sale.settledAt && (
               <DetailItem label="Liquidado el" value={formatDateTime(sale.settledAt)} />
             )}

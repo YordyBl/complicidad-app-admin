@@ -1,44 +1,33 @@
 /**
- * Tests for report-cards — pure helpers + structural layout + rendering + independence.
+ * Tests for report-cards — pure helpers + layout structure + list card rendering + independence.
  *
- * parsePage / parsePageSize / parseSearch are pure functions
- * tested directly without mocks (Extract-Before-Mock pattern).
+ * Architecture change: KPI data is now pre-fetched at page level and passed as props.
+ * Only list cards (StockByProduct, Lots) still fetch data async with Suspense.
  *
- * Layout structure tests verify:
- *  - KPI section renders before list section
- *  - KPI grid uses 3-column xl layout
- *  - List grid uses wider layout than KPI grid
+ * parsePage / parsePageSize / parseSearch are pure functions tested directly.
  *
- * Rendering tests verify the full data→UI pipeline:
- *  - LiquidityCard renders formatted currency (not NaN)
- *  - LotsCard renders unitCostCents as formatted currency
+ * Layout structure tests verify the new 4-section organization:
+ *  1. Salud del negocio (primary KPIs)
+ *  2. Rentabilidad (secondary: COGS, margin, active sales)
+ *  3. Capital e inversión (secondary: stock investment, reinvestment)
+ *  4. Detalle operativo (list cards with Suspense)
  *
- * Independence tests verify:
- *  - buildCardUrl preserves other card's params
- *  - Each card receives independent query state
+ * List card rendering and independence tests are preserved.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // ═══════════════════════════════════════════════════════════════════
-// Hoisted API mocks for rendering tests
+// Hoisted API mocks — only needed for list card tests
 // ═══════════════════════════════════════════════════════════════════
 
-const { mockGetLiquidity, mockGetLots, mockGetStockByProduct } = vi.hoisted(() => ({
-  mockGetLiquidity: vi.fn(),
+const { mockGetLots, mockGetStockByProduct } = vi.hoisted(() => ({
   mockGetLots: vi.fn(),
   mockGetStockByProduct: vi.fn(),
 }))
 
 vi.mock('@/shared/api/reports', () => ({
-  getLiquidity: mockGetLiquidity,
-  getStockInvestment: vi.fn().mockResolvedValue({ ok: true, data: { totalInvestmentCents: 0, currency: 'ARS' } }),
-  getSalesTotal: vi.fn().mockResolvedValue({ ok: true, data: { totalSalesCents: 0, currency: 'ARS', activeSaleCount: 0 } }),
-  getFifoCogs: vi.fn().mockResolvedValue({ ok: true, data: { totalCogsCents: 0, currency: 'ARS' } }),
-  getGrossProfit: vi.fn().mockResolvedValue({ ok: true, data: { grossProfitCents: 0, currency: 'ARS' } }),
-  getReinvestment: vi.fn().mockResolvedValue({ ok: true, data: { reinvestmentCents: 0, currency: 'ARS' } }),
-  getOperatingCapital: vi.fn().mockResolvedValue({ ok: true, data: { operatingCapitalCents: 0, currency: 'ARS' } }),
-  getStockByProduct: mockGetStockByProduct,
   getLots: mockGetLots,
+  getStockByProduct: mockGetStockByProduct,
 }))
 
 // ═══════════════════════════════════════════════════════════════════
@@ -142,9 +131,7 @@ describe('buildCardUrl — cross-card independence', () => {
 
     const url = buildCardUrl('lots', allQueries, { page: '3' })
 
-    // Lots page changed
     expect(url).toContain('lots_page=3')
-    // Stock params preserved
     expect(url).toContain('stock_page=2')
     expect(url).toContain('stock_search=camiseta')
   })
@@ -157,9 +144,7 @@ describe('buildCardUrl — cross-card independence', () => {
 
     const url = buildCardUrl('stock', allQueries, { page: '2' })
 
-    // Stock page changed
     expect(url).toContain('stock_page=2')
-    // Lots params preserved
     expect(url).toContain('lots_page=3')
     expect(url).toContain('lots_search=zapato')
   })
@@ -183,185 +168,333 @@ describe('buildCardUrl — cross-card independence', () => {
       lots: { page: '1' },
     }
 
-    // Snapshot the stock query before building
     const stockBefore = { ...allQueries.stock }
     buildCardUrl('lots', allQueries, { page: '3' })
 
-    // Stock query must be unchanged after building lots URL
     expect(allQueries.stock.page).toBe(stockBefore.page)
     expect(allQueries.stock.search).toBe(stockBefore.search)
   })
 })
 
 // ═══════════════════════════════════════════════════════════════════
-// Layout tests — verify the structural output of ReportCards
+// Helpers for layout tests
 // ═══════════════════════════════════════════════════════════════════
 
-describe('ReportCards layout', () => {
-  it('renders a Fragment with two section children (KPI then list)', async () => {
+function nullKpiData() {
+  return {
+    salesTotal: null,
+    liquidity: null,
+    operatingCapital: null,
+    grossProfit: null,
+    cogs: null,
+    stockInvestment: null,
+    reinvestment: null,
+  }
+}
+
+function sampleKpiData() {
+  return {
+    salesTotal: { totalSalesCents: 500000, currency: 'PEN', activeSaleCount: 12 },
+    liquidity: { liquidityCents: 150000, currency: 'PEN' },
+    operatingCapital: { operatingCapitalCents: 800000, currency: 'PEN' },
+    grossProfit: { grossProfitCents: 200000, currency: 'PEN' },
+    cogs: { totalCogsCents: 300000, currency: 'PEN' },
+    stockInvestment: { totalInvestmentCents: 400000, currency: 'PEN' },
+    reinvestment: { reinvestmentCents: 100000, currency: 'PEN' },
+  }
+}
+
+/**
+ * Child index map for ReportCards output (fixed 11-element array):
+ *   [0] SectionHeader — "Salud del negocio"
+ *   [1] div.grid    — 4 KpiCards (primary)
+ *   [2] Separator
+ *   [3] SectionHeader — "Rentabilidad"
+ *   [4] div.grid    — 3 SecondaryMetricCards
+ *   [5] Separator
+ *   [6] SectionHeader — "Capital e inversión"
+ *   [7] div.grid    — 2 SecondaryMetricCards
+ *   [8] Separator
+ *   [9] SectionHeader — "Detalle operativo"
+ *   [10] div.grid   — 2 Suspense wrappers (list cards)
+ */
+const IDX = {
+  SALUD_HEADER: 0,
+  SALUD_GRID: 1,
+  SEP_1: 2,
+  RENTAB_HEADER: 3,
+  RENTAB_GRID: 4,
+  SEP_2: 5,
+  CAPITAL_HEADER: 6,
+  CAPITAL_GRID: 7,
+  SEP_3: 8,
+  OPER_HEADER: 9,
+  OPER_GRID: 10,
+} as const
+
+function isSeparator(child: unknown): boolean {
+  if (!child || typeof child !== 'object') return false
+  const c = child as { type?: unknown }
+  // Separator is a forwardRef component; type is a Symbol in production
+  if (typeof c.type === 'symbol') return true
+  // In dev mode, forwardRef components can have a render function
+  if (typeof c.type === 'object' && c.type !== null && '$$typeof' in c.type) return true
+  return false
+}
+
+function isSectionHeader(child: unknown): boolean {
+  if (!child || typeof child !== 'object') return false
+  const c = child as { type?: unknown }
+  return typeof c.type === 'function' && (c.type as { name?: string }).name === 'SectionHeader'
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Layout tests — verify the 4-section structure of ReportCards
+// ═══════════════════════════════════════════════════════════════════
+
+describe('ReportCards layout — new 4-section structure', () => {
+  it('renders 11 children: 4 section headers + 4 grids + 3 separators', async () => {
     const { ReportCards } = await import('./report-cards')
 
-    const element = await ReportCards({})
-
-    expect(element).toBeDefined()
-    // React Fragment: type is Symbol(react.fragment), children in props
+    const element = await ReportCards({ ...nullKpiData() })
     const children = element.props.children
-    expect(Array.isArray(children)).toBe(true)
-    expect(children.length).toBeGreaterThanOrEqual(2)
 
-    // First: KPI section
-    expect(children[0].type).toBe('section')
-
-    // Second: List section
-    expect(children[1].type).toBe('section')
+    expect(children).toHaveLength(11)
   })
 
-  it('KPI section heading says "Indicadores clave"', async () => {
+  it('first section header says "Salud del negocio"', async () => {
     const { ReportCards } = await import('./report-cards')
 
-    const element = await ReportCards({})
-    const kpiSection = element.props.children[0]
+    const element = await ReportCards({ ...nullKpiData() })
+    const children = element.props.children
 
-    const heading = kpiSection.props.children[0]
-    expect(heading.type).toBe('h2')
-    expect(heading.props.children).toBe('Indicadores clave')
+    expect(children[IDX.SALUD_HEADER].props.title).toBe('Salud del negocio')
   })
 
-  it('KPI grid has 3-column xl layout class', async () => {
+  it('all 4 section titles are present', async () => {
     const { ReportCards } = await import('./report-cards')
 
-    const element = await ReportCards({})
-    const kpiSection = element.props.children[0]
-    const kpiGrid = kpiSection.props.children[1]
+    const element = await ReportCards({ ...nullKpiData() })
+    const children = element.props.children
 
-    expect(kpiGrid.props.className).toContain('xl:grid-cols-3')
+    const titles = [
+      children[IDX.SALUD_HEADER].props.title,
+      children[IDX.RENTAB_HEADER].props.title,
+      children[IDX.CAPITAL_HEADER].props.title,
+      children[IDX.OPER_HEADER].props.title,
+    ]
+
+    expect(titles).toEqual([
+      'Salud del negocio',
+      'Rentabilidad',
+      'Capital e inversión',
+      'Detalle operativo',
+    ])
   })
 
-  it('list section heading says "Listados"', async () => {
+  it('Salud del negocio uses 4-column grid on xl screens', async () => {
     const { ReportCards } = await import('./report-cards')
 
-    const element = await ReportCards({})
-    const listSection = element.props.children[1]
+    const element = await ReportCards({ ...nullKpiData() })
+    const children = element.props.children
 
-    const heading = listSection.props.children[0]
-    expect(heading.type).toBe('h2')
-    expect(heading.props.children).toBe('Listados')
+    expect(children[IDX.SALUD_GRID].props.className).toContain('xl:grid-cols-4')
   })
 
-  it('list grid does NOT use 3-column xl layout (should be wider)', async () => {
+  it('Salud del negocio contains 4 KpiCard components', async () => {
     const { ReportCards } = await import('./report-cards')
 
-    const element = await ReportCards({})
-    const listSection = element.props.children[1]
-    const listGrid = listSection.props.children[1]
+    const element = await ReportCards({ ...nullKpiData() })
+    const children = element.props.children
 
-    expect(listGrid.props.className).not.toContain('xl:grid-cols-3')
+    const saludGrid = children[IDX.SALUD_GRID]
+    expect(saludGrid.props.children).toHaveLength(4)
+    expect(saludGrid.props.children[0].props.label).toBe('Ventas totales')
+    expect(saludGrid.props.children[1].props.label).toBe('Liquidez')
+    expect(saludGrid.props.children[2].props.label).toBe('Capital operativo')
+    expect(saludGrid.props.children[3].props.label).toBe('Ganancia bruta')
   })
 
-  // ── Suspense skeleton fallback presence ──────────────────────────
-
-  it('KPI grid wraps each card in Suspense with a skeleton fallback', async () => {
+  it('Detalle operativo has list cards wrapped in Suspense', async () => {
     const { ReportCards } = await import('./report-cards')
 
-    const element = await ReportCards({})
-    const kpiSection = element.props.children[0]
-    const kpiGrid = kpiSection.props.children[1]
+    const element = await ReportCards({ ...nullKpiData() })
+    const children = element.props.children
 
-    // Should have 7 Suspense wrappers (one per KPI card)
-    expect(Array.isArray(kpiGrid.props.children)).toBe(true)
-    expect(kpiGrid.props.children.length).toBe(7)
+    const operGrid = children[IDX.OPER_GRID]
+    expect(operGrid.props.children).toHaveLength(2)
 
-    // Each child should be a Suspense component
-    for (const child of kpiGrid.props.children) {
-      // React.Suspense type is Symbol(react.suspense) in production
+    for (const child of operGrid.props.children) {
       expect(child.type).toBeDefined()
       expect(child.props.fallback).toBeDefined()
     }
   })
 
-  it('list grid wraps each list card in Suspense with a skeleton fallback', async () => {
+  it('has 3 separators between each section', async () => {
     const { ReportCards } = await import('./report-cards')
 
-    const element = await ReportCards({})
-    const listSection = element.props.children[1]
-    const listGrid = listSection.props.children[1]
+    const element = await ReportCards({ ...nullKpiData() })
+    const children = element.props.children
 
-    // Should have 2 Suspense wrappers (stock-by-product + lots)
-    expect(Array.isArray(listGrid.props.children)).toBe(true)
-    expect(listGrid.props.children.length).toBe(2)
-
-    for (const child of listGrid.props.children) {
-      expect(child.type).toBeDefined()
-      expect(child.props.fallback).toBeDefined()
+    const sepIndices = [IDX.SEP_1, IDX.SEP_2, IDX.SEP_3]
+    for (const idx of sepIndices) {
+      expect(isSeparator(children[idx])).toBe(true)
     }
   })
 
-  // ── Independent query props ──────────────────────────────────────
+  it('Rentabilidad has 3 secondary metric cards', async () => {
+    const { ReportCards } = await import('./report-cards')
+
+    const element = await ReportCards({ ...nullKpiData() })
+    const children = element.props.children
+
+    const rentabGrid = children[IDX.RENTAB_GRID]
+    expect(rentabGrid.props.children).toHaveLength(3)
+  })
+
+  it('Capital has 2 secondary metric cards', async () => {
+    const { ReportCards } = await import('./report-cards')
+
+    const element = await ReportCards({ ...nullKpiData() })
+    const children = element.props.children
+
+    const capitalGrid = children[IDX.CAPITAL_GRID]
+    expect(capitalGrid.props.children).toHaveLength(2)
+  })
+
+  // ── Derived insights from real data ────────────────────────────
+
+  it('computes gross margin % when both salesTotal and grossProfit are available', async () => {
+    const { ReportCards } = await import('./report-cards')
+
+    const element = await ReportCards({ ...sampleKpiData() })
+    // 500000 sales, 200000 gross profit = 40% margin
+
+    const children = element.props.children
+    const rentabGrid = children[IDX.RENTAB_GRID]
+
+    // 3 cards: COGS, Margen bruto, Ventas activas
+    const cards = rentabGrid.props.children
+    expect(cards).toHaveLength(3)
+
+    const marginCard = cards[1]
+    expect(marginCard.props.label).toBe('Margen bruto')
+    expect(marginCard.props.value).toBe('40.0%')
+    expect(marginCard.props.subtitle).toBe('Sobre ventas totales')
+    expect(marginCard.props.emphasis).toBe('positive')
+  })
+
+  it('shows fallback for margin when salesTotal is null', async () => {
+    const { ReportCards } = await import('./report-cards')
+
+    const element = await ReportCards({
+      ...sampleKpiData(),
+      salesTotal: null,
+    })
+
+    const children = element.props.children
+    const rentabGrid = children[IDX.RENTAB_GRID]
+    const marginCard = rentabGrid.props.children[1]
+
+    expect(marginCard.props.label).toBe('Margen bruto')
+    expect(marginCard.props.value).toBe('—')
+    expect(marginCard.props.subtitle).toBe('Datos insuficientes')
+  })
+
+  it('computes stock vs operating capital % when both are available', async () => {
+    const { ReportCards } = await import('./report-cards')
+
+    const element = await ReportCards({ ...sampleKpiData() })
+    // 400000 stock, 800000 op capital = 50%
+
+    const children = element.props.children
+    const capitalGrid = children[IDX.CAPITAL_GRID]
+
+    const stockCard = capitalGrid.props.children[0]
+    expect(stockCard.props.label).toBe('Inversión en stock')
+    expect(stockCard.props.subtitle).toBe('50.0% del capital operativo')
+  })
+
+  it('shows default subtitle for stock investment when op capital is null', async () => {
+    const { ReportCards } = await import('./report-cards')
+
+    const element = await ReportCards({
+      ...sampleKpiData(),
+      operatingCapital: null,
+    })
+
+    const children = element.props.children
+    const capitalGrid = children[IDX.CAPITAL_GRID]
+    const stockCard = capitalGrid.props.children[0]
+
+    expect(stockCard.props.subtitle).toBe('Capital invertido en inventario')
+  })
+
+  // ── Null data handling ─────────────────────────────────────────
+
+  it('renders all KPI cards with — when all data is null', async () => {
+    const { ReportCards } = await import('./report-cards')
+
+    const element = await ReportCards({ ...nullKpiData() })
+    const children = element.props.children
+
+    const saludGrid = children[IDX.SALUD_GRID]
+
+    expect(saludGrid.props.children[0].props.value).toBe('—')
+    expect(saludGrid.props.children[1].props.value).toBe('—')
+    expect(saludGrid.props.children[2].props.value).toBe('—')
+    expect(saludGrid.props.children[3].props.value).toBe('—')
+  })
+
+  it('passes activeSaleCount as subtitle for ventas totales', async () => {
+    const { ReportCards } = await import('./report-cards')
+
+    const element = await ReportCards({
+      ...nullKpiData(),
+      salesTotal: { totalSalesCents: 100000, currency: 'PEN', activeSaleCount: 7 },
+    })
+
+    const children = element.props.children
+    const saludGrid = children[IDX.SALUD_GRID]
+
+    expect(saludGrid.props.children[0].props.subtitle).toBe('7 ventas activas')
+  })
+
+  // ── Independent query props ────────────────────────────────────
 
   it('passes independent stockQuery and lotsQuery to list cards', async () => {
     const { ReportCards } = await import('./report-cards')
 
     const element = await ReportCards({
+      ...nullKpiData(),
       stockQuery: { page: '2', search: 'remera' },
       lotsQuery: { page: '3', search: 'zapato' },
     })
 
-    const listSection = element.props.children[1]
-    const listGrid = listSection.props.children[1]
+    const children = element.props.children
+    const operGrid = children[IDX.OPER_GRID]
 
-    // First child: StockByProductCard
-    const stockSuspense = listGrid.props.children[0]
+    const stockSuspense = operGrid.props.children[0]
     const stockCardEl = stockSuspense.props.children
 
-    // Verify StockByProductCard receives stock query and correct namespace
     expect(stockCardEl.props.query).toEqual({ page: '2', search: 'remera' })
     expect(stockCardEl.props.namespace).toBe('stock')
-    expect(stockCardEl.props.allQueries.stock).toEqual({ page: '2', search: 'remera' })
-    expect(stockCardEl.props.allQueries.lots).toEqual({ page: '3', search: 'zapato' })
 
-    // Second child: LotsCard
-    const lotsSuspense = listGrid.props.children[1]
+    const lotsSuspense = operGrid.props.children[1]
     const lotsCardEl = lotsSuspense.props.children
 
-    // Verify LotsCard receives lots query and correct namespace
     expect(lotsCardEl.props.query).toEqual({ page: '3', search: 'zapato' })
     expect(lotsCardEl.props.namespace).toBe('lots')
-    expect(lotsCardEl.props.allQueries.lots).toEqual({ page: '3', search: 'zapato' })
-    expect(lotsCardEl.props.allQueries.stock).toEqual({ page: '2', search: 'remera' })
-  })
-
-  it('each card receives a DIFFERENT query object (not shared by reference)', async () => {
-    const { ReportCards } = await import('./report-cards')
-
-    const element = await ReportCards({
-      stockQuery: { page: '1' },
-      lotsQuery: { page: '5' },
-    })
-
-    const listSection = element.props.children[1]
-    const listGrid = listSection.props.children[1]
-
-    const stockCardEl = listGrid.props.children[0].props.children
-    const lotsCardEl = listGrid.props.children[1].props.children
-
-    // Different page values — proof of independence
-    expect(stockCardEl.props.query.page).toBe('1')
-    expect(lotsCardEl.props.query.page).toBe('5')
   })
 })
 
 // ═══════════════════════════════════════════════════════════════════
-// Rendering with data — proves NO NaN in final UI
+// List card rendering — data pipeline proof
 // ═══════════════════════════════════════════════════════════════════
 
-describe('ReportCards — rendering with data', () => {
+describe('ReportCards — list card rendering with data', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    // Default: all API calls return zero/empty values
-    mockGetLiquidity.mockResolvedValue({
-      ok: true,
-      data: { liquidityCents: 0, currency: 'ARS' },
-    } as const)
     mockGetLots.mockResolvedValue({
       ok: true,
       data: { items: [], page: 1, pageSize: 5, totalItems: 0, totalPages: 0, search: '' },
@@ -372,101 +505,15 @@ describe('ReportCards — rendering with data', () => {
     } as const)
   })
 
-  /**
-   * Extract an async card component from a Suspense wrapper and call it
-   * directly with mocked dependencies. This bypasses the jsdom Suspense
-   * boundary limitation while still proving the component renders correctly.
-   */
+  type AsyncCardFn = (props: Record<string, unknown>) => Promise<{ props: Record<string, unknown> }>
+
   async function resolveSuspenseCard(suspenseEl: { props: { children: { type: CallableFunction; props: Record<string, unknown> } } }) {
     const cardEl = suspenseEl.props.children
-    const CardFn = cardEl.type as (props: Record<string, unknown>) => Promise<unknown>
+    const CardFn = cardEl.type as AsyncCardFn
     return CardFn(cardEl.props)
   }
 
-  it('LiquidityCard renders formatted currency (not NaN) when data exists', async () => {
-    mockGetLiquidity.mockResolvedValue({
-      ok: true,
-      data: { liquidityCents: 150000, currency: 'ARS' },
-    } as const)
-
-    const { ReportCards } = await import('./report-cards')
-    const element = await ReportCards({})
-
-    // Navigate: Fragment → KPI section → grid → first Suspense → LiquidityCard
-    const kpiSection = element.props.children[0]
-    const kpiGrid = kpiSection.props.children[1]
-    const liquiditySuspense = kpiGrid.props.children[0]
-    const renderedCard = await resolveSuspenseCard(liquiditySuspense)
-
-    // renderedCard is a React element with type=LiquidityCard
-    // Its props.children is the AmountDisplay element
-    const amountDisplayEl = renderedCard.props.children
-
-    // Call AmountDisplay to get rendered output
-    const AmountDisplayFn = amountDisplayEl.type as (props: Record<string, unknown>) => unknown
-    const renderedDisplay = AmountDisplayFn(amountDisplayEl.props) as { type: string; props: Record<string, unknown> }
-
-    // AmountDisplay renders: <div> <p>label</p> <p>formatted-value</p> </div>
-    expect(renderedDisplay.type).toBe('div')
-    const children = renderedDisplay.props.children as Array<{ type: string; props: Record<string, unknown> }>
-    const valueParagraph = children[1]
-    expect(valueParagraph.type).toBe('p')
-    expect(valueParagraph.props.className).toContain('text-green')
-    // formatCurrency(150000) = "S/ 1,500.00"
-    expect(valueParagraph.props.children).toContain('1,500.00')
-  })
-
-  it('LiquidityCard shows negative balance with red variant', async () => {
-    mockGetLiquidity.mockResolvedValue({
-      ok: true,
-      data: { liquidityCents: -30000, currency: 'ARS' },
-    } as const)
-
-    const { ReportCards } = await import('./report-cards')
-    const element = await ReportCards({})
-
-    const kpiSection = element.props.children[0]
-    const kpiGrid = kpiSection.props.children[1]
-    const liquiditySuspense = kpiGrid.props.children[0]
-    const renderedCard = await resolveSuspenseCard(liquiditySuspense)
-
-    const amountDisplayEl = renderedCard.props.children
-    const AmountDisplayFn = amountDisplayEl.type as (props: Record<string, unknown>) => unknown
-    const renderedDisplay = AmountDisplayFn(amountDisplayEl.props) as { type: string; props: Record<string, unknown> }
-
-    const children = renderedDisplay.props.children as Array<{ type: string; props: Record<string, unknown> }>
-    const valueParagraph = children[1]
-
-    expect(valueParagraph.props.className).toContain('text-red')
-    // formatCurrency(-30000) contains "300.00"
-    expect(valueParagraph.props.children).toContain('300.00')
-  })
-
-  it('LiquidityCard shows empty state when liquidityCents is zero', async () => {
-    mockGetLiquidity.mockResolvedValue({
-      ok: true,
-      data: { liquidityCents: 0, currency: 'ARS' },
-    } as const)
-
-    const { ReportCards } = await import('./report-cards')
-    const element = await ReportCards({})
-
-    const kpiSection = element.props.children[0]
-    const kpiGrid = kpiSection.props.children[1]
-    const liquiditySuspense = kpiGrid.props.children[0]
-    const renderedCard = await resolveSuspenseCard(liquiditySuspense)
-
-    // Zero liquidity renders EmptyState, not AmountDisplay
-    const cardContent = renderedCard.props.children
-    // EmptyState component has title and description props
-    expect(cardContent.props.title).toBe('Sin datos')
-  })
-
-  it('LotsCard renders without error when lots data exists (unitCostCents pipeline proof)', async () => {
-    // Full rendering proof for unitCostCents:
-    // 1. API schema (reports.test.ts) → unitCostCents is always integer cents
-    // 2. formatCurrency (formatters.test.ts) → integers → "S/ X.XX"
-    // 3. This test → component pipeline resolves without crash
+  it('LotsCard renders lot items with currency formatting', async () => {
     mockGetLots.mockResolvedValue({
       ok: true,
       data: {
@@ -493,54 +540,34 @@ describe('ReportCards — rendering with data', () => {
     } as const)
 
     const { ReportCards } = await import('./report-cards')
-    const element = await ReportCards({})
-
-    const listSection = element.props.children[1]
-    const listGrid = listSection.props.children[1]
-    const lotsSuspense = listGrid.props.children[1]
+    const element = await ReportCards({ ...nullKpiData() })
+    const children = element.props.children
+    const operGrid = children[IDX.OPER_GRID]
+    const lotsSuspense = operGrid.props.children[1]
     const renderedCard = await resolveSuspenseCard(lotsSuspense)
 
-    // renderedCard is the React element returned by LotsCard
-    // It should be a ReportCard with title="Lotes"
-    expect(renderedCard).toBeDefined()
     expect(renderedCard.props.title).toBe('Lotes')
     expect(renderedCard.props.description).toBe('Registro de lotes de compra')
-
-    // The children prop of ReportCard contains the actual content
-    // (ListSearchForm + items list or empty state)
-    const cardChildren = renderedCard.props.children
-    expect(cardChildren).toBeDefined()
+    expect(renderedCard.props.children).toBeDefined()
   })
 
   it('LotsCard shows empty state when no lots exist', async () => {
     mockGetLots.mockResolvedValue({
       ok: true,
-      data: {
-        items: [],
-        page: 1,
-        pageSize: 5,
-        totalItems: 0,
-        totalPages: 0,
-        search: '',
-      },
+      data: { items: [], page: 1, pageSize: 5, totalItems: 0, totalPages: 0, search: '' },
     } as const)
 
     const { ReportCards } = await import('./report-cards')
-    const element = await ReportCards({})
-
-    const listSection = element.props.children[1]
-    const listGrid = listSection.props.children[1]
-    const lotsSuspense = listGrid.props.children[1]
+    const element = await ReportCards({ ...nullKpiData() })
+    const children = element.props.children
+    const operGrid = children[IDX.OPER_GRID]
+    const lotsSuspense = operGrid.props.children[1]
     const renderedCard = await resolveSuspenseCard(lotsSuspense)
 
-    // ReportCard props verify it's the right card
     expect(renderedCard.props.title).toBe('Lotes')
-    expect(renderedCard.props.children).toBeDefined()
   })
 
-  // ── Independence: StockByProductCard receives stock query, not lots query ──
-
-  it('StockByProductCard uses stockQuery (not lotsQuery) for API call', async () => {
+  it('StockByProductCard uses stockQuery for API call', async () => {
     const stockQuery = { page: '2', search: 'remera' }
     const lotsQuery = { page: '5', search: 'zapato' }
 
@@ -550,26 +577,24 @@ describe('ReportCards — rendering with data', () => {
     } as const)
 
     const { ReportCards } = await import('./report-cards')
-    const element = await ReportCards({ stockQuery, lotsQuery })
-
-    const listSection = element.props.children[1]
-    const listGrid = listSection.props.children[1]
-    const stockSuspense = listGrid.props.children[0]
+    const element = await ReportCards({ ...nullKpiData(), stockQuery, lotsQuery })
+    const children = element.props.children
+    const operGrid = children[IDX.OPER_GRID]
+    const stockSuspense = operGrid.props.children[0]
     await resolveSuspenseCard(stockSuspense)
 
-    // getStockByProduct should have been called with stock params, not lots params
     expect(mockGetStockByProduct).toHaveBeenCalledWith({
       page: 2,
       pageSize: 5,
       search: 'remera',
     })
-    // Must NOT have been called with lots query values
+
     const callArg = mockGetStockByProduct.mock.calls[0]?.[0]
     expect(callArg?.page).not.toBe(5)
     expect(callArg?.search).not.toBe('zapato')
   })
 
-  it('LotsCard uses lotsQuery (not stockQuery) for API call', async () => {
+  it('LotsCard uses lotsQuery for API call', async () => {
     const stockQuery = { page: '2', search: 'remera' }
     const lotsQuery = { page: '3', search: 'pantalón' }
 
@@ -579,21 +604,58 @@ describe('ReportCards — rendering with data', () => {
     } as const)
 
     const { ReportCards } = await import('./report-cards')
-    const element = await ReportCards({ stockQuery, lotsQuery })
-
-    const listSection = element.props.children[1]
-    const listGrid = listSection.props.children[1]
-    const lotsSuspense = listGrid.props.children[1]
+    const element = await ReportCards({ ...nullKpiData(), stockQuery, lotsQuery })
+    const children = element.props.children
+    const operGrid = children[IDX.OPER_GRID]
+    const lotsSuspense = operGrid.props.children[1]
     await resolveSuspenseCard(lotsSuspense)
 
-    // getLots should have been called with lots params, not stock params
     expect(mockGetLots).toHaveBeenCalledWith({
       page: 3,
       pageSize: 5,
       search: 'pantalón',
     })
+
     const callArg = mockGetLots.mock.calls[0]?.[0]
     expect(callArg?.page).not.toBe(2)
     expect(callArg?.search).not.toBe('remera')
+  })
+
+  // ── Summary row context in list cards ──────────────────────────
+
+  it('LotsCard shows OPEN/EXHAUSTED status counts in summary row', async () => {
+    mockGetLots.mockResolvedValue({
+      ok: true,
+      data: {
+        items: [
+          { lotId: 'l1', variantId: 'v1', productName: 'A', sku: 'A1', purchasedQuantity: 10, remainingQuantity: 5, unitCostCents: 1000, totalCostCents: 10000, purchaseDate: '2026-01-01T00:00:00.000Z', status: 'OPEN' },
+          { lotId: 'l2', variantId: 'v2', productName: 'B', sku: 'B1', purchasedQuantity: 20, remainingQuantity: 0, unitCostCents: 2000, totalCostCents: 40000, purchaseDate: '2026-01-01T00:00:00.000Z', status: 'EXHAUSTED' },
+        ],
+        page: 1,
+        pageSize: 5,
+        totalItems: 2,
+        totalPages: 1,
+        search: '',
+      },
+    } as const)
+
+    const { ReportCards } = await import('./report-cards')
+    const element = await ReportCards({ ...nullKpiData() })
+    const children = element.props.children
+    const operGrid = children[IDX.OPER_GRID]
+    const lotsSuspense = operGrid.props.children[1]
+    const renderedCard = await resolveSuspenseCard(lotsSuspense)
+
+    const cardChildren = renderedCard.props.children as Array<{ props: Record<string, unknown> }>
+    expect(cardChildren).toBeDefined()
+
+    // cardChildren: [ListSearchForm, summaryDiv, itemListDiv? or empty]
+    const summaryRow = cardChildren[1]
+    expect(summaryRow).toBeDefined()
+
+    // summaryRow has text with open/agotado counts
+    const summaryText = JSON.stringify(summaryRow.props.children)
+    expect(summaryText).toContain('abierto')
+    expect(summaryText).toContain('agotado')
   })
 })

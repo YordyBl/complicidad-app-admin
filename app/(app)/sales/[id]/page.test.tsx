@@ -73,6 +73,22 @@ vi.mock('lucide-react', async (importOriginal) => {
   }
 })
 
+vi.mock('@/features/sales/sale-settlement-button', () => ({
+  SaleSettlementButton: () => require('react').createElement('button', {
+    'data-testid': 'settle-button',
+  }, 'Liquidar saldo'),
+}))
+
+vi.mock('@/features/sales/sale-documents-card', () => ({
+  SaleDocumentsCard: () => require('react').createElement('div', {
+    'data-testid': 'documents-card',
+  }, 'Documentos'),
+}))
+
+vi.mock('@/features/sales/delivery-message-dialog', () => ({
+  DeliveryMessageDialog: () => null,
+}))
+
 import { SaleDetailContent } from '@/features/sales/sale-detail-content'
 import type { SaleDetail } from '@/shared/api/sales'
 
@@ -88,22 +104,31 @@ function makeSale(overrides: Partial<SaleDetail> = {}): SaleDetail {
     grossProfitCents: 75000,
     createdAt: '2026-01-01T10:00:00Z',
     updatedAt: '2026-01-01T10:00:00Z',
+    customerName: 'Cliente Demo',
+    customerPhone: '+51999111222',
+    customerAddress: 'Av. Test 123',
+    customerDistrict: 'Lima',
+    googleMapsUrl: null,
     lines: [{
       id: 'line-1',
       variantId: 'var-1',
       quantity: 2,
       unitPriceCents: 75000,
-      priceType: 'regular',
+      priceType: 'regular' as const,
       totalPriceCents: 150000,
       totalCostCents: 75000,
       consumptions: [],
+      productName: 'Test Product',
+      sku: 'SKU001',
+      displayLabel: 'Test Product',
+      attributes: {},
     }],
     paymentStatus: 'pending',
     amountPaidCents: 0,
     pendingBalanceCents: 150000,
     settledAt: null,
     ...overrides,
-  }
+  } as SaleDetail
 }
 
 describe('SaleDetailContent — payment snapshot', () => {

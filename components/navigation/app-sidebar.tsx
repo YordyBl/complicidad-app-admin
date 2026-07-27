@@ -9,7 +9,6 @@ import {
   Users,
   BarChart3,
   Banknote,
-  Menu,
 } from 'lucide-react'
 
 import {
@@ -25,6 +24,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
   SidebarInset,
+  SidebarFooter,
 } from '@/components/ui/sidebar'
 import { LogoutButton } from '@/features/auth/logout/logout-button'
 
@@ -44,16 +44,20 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
     <SidebarProvider>
       <div className="flex min-h-screen w-full">
         <Sidebar>
-          <SidebarHeader className="border-b px-6 py-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <Menu className="w-4 h-4 text-primary-foreground" />
+          <SidebarHeader className="px-5 py-4">
+            <Link href="/dashboard" className="flex items-center gap-3 group">
+              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center group-hover:bg-primary/90 transition-colors">
+                <LayoutDashboard className="w-4 h-4 text-primary-foreground" />
               </div>
-              <div>
-                <h2 className="font-semibold text-sm">Complicidad</h2>
-                <p className="text-xs text-muted-foreground">Gestión</p>
+              <div className="min-w-0">
+                <h2 className="font-bold text-sm tracking-tight">
+                  Complicidad
+                </h2>
+                <p className="text-[11px] text-muted-foreground leading-tight">
+                  Centro de operaciones
+                </p>
               </div>
-            </div>
+            </Link>
           </SidebarHeader>
 
           <SidebarContent className="flex flex-col justify-between h-[calc(100vh-4rem)]">
@@ -78,9 +82,11 @@ export function AppSidebar({ children }: { children: React.ReactNode }) {
               </SidebarGroupContent>
             </SidebarGroup>
 
-            <div className="px-3 py-2 border-t">
-              <LogoutButton />
-            </div>
+            <SidebarFooter className="border-t">
+              <div className="px-3 py-2">
+                <LogoutButton />
+              </div>
+            </SidebarFooter>
           </SidebarContent>
         </Sidebar>
 

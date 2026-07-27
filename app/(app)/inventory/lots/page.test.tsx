@@ -238,10 +238,10 @@ describe('InventoryLotsPage — data loaded', () => {
   it('renders lot state badges with correct text', async () => {
     await renderPage({ rawParams: { productId: 'prod-1' } })
 
-    // Multiple INTACT badges (two lots)
-    const intactBadges = screen.getAllByText('INTACT')
-    expect(intactBadges.length).toBeGreaterThanOrEqual(2)
-    expect(screen.getByText('EXHAUSTED')).toBeInTheDocument()
+    // Multiple Activo badges (two lots)
+    const activeBadges = screen.getAllByText('Activo')
+    expect(activeBadges.length).toBeGreaterThanOrEqual(2)
+    expect(screen.getByText('Agotado')).toBeInTheDocument()
   })
 
   it('renders back link to inventory', async () => {
